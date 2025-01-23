@@ -1,0 +1,523 @@
+---
+title: "RSV_250119"
+output: html_document
+date: "2025-01-19"
+---
+
+### load in packages
+```{r}
+library(arrow)
+library(dplyr)
+library(survival)
+library(survminer)
+```
+
+### read in parquet database
+```{r}
+NY_pq <- open_dataset("/Volumes/home/HCUPdata-CC0941-MEDSPH/ParquetData/NY", format = "parquet")
+NY_pq_df <- as.data.frame(NY_pq)
+```
+
+### [Backup for SEDD]
+NY_pq_SEDD <- open_dataset("/Volumes/home/HCUPdata-CC0941-MEDSPH/ParquetData/NY_SEDD", format = "parquet")
+column_names <- NY_pq_SEDD$schema$names
+print(column_names)
+
+### Variables I need
+- Birth Date
+  [153] birth_year = "Birth year" ***
+  [152] birth_month = "Birth month"                                                               
+  [1] age_year = "Age in years at admission"                                                      
+  [2] age_days = "Age in days (when age < 1 year)"                                                
+  [3] age_months = "Age in months (when age < 11 years)"    
+  
+- Basic
+  [47] Sex = "Indicator of sex"  
+  [140] Race = "Race (uniform)"   
+  [50] Ethnicity = "Hispanic ethnicity (uniform)"
+  [104] Income_quartile = "Median household income state quartile for patient ZIP Code"
+  [12] Death =  'Died during hospitalization'
+  
+- Admission and Discharge
+  [5] Amonth='Admission month'
+  [151] Ayear="Admission year"  
+  [11] Dhour = "Discharge Hour"
+  [16] Dmonth = "Discharge month"
+  [17] Dquarter = "Discharge quarter"
+  [98] Length_Of_Stay_C = "Length of stay (cleaned)"
+  [99] Length_Of_Stay_O = "Length of stay (as received from source)"
+ 
+- Geographic
+  [148] ZIP="Patient ZIP Code"
+  [149] ZIP_3digits = "Patient ZIP Code, frist 3 digits"
+  [112] Loc_CBSA = "Patient location: Core Based Statistical Area (CBSA)"                            
+  [113] Loc_UrbanRural = "Patient Location: NCHS Urban-Rural Code"                                   
+  [114] Loc_UrbanInfluence = "Patient location: Urban Influence Codes"                            
+  [115] Loc_UrbanRural4Cate = "Patient Location: Urban-Rural 4 Categories"  
+  [138] State = "Patient State postal code"                                                          
+  [139] State_FIPS = "Patient state/county FIPS code" 
+  
+- Identifier
+  [146] ID="Visit linkage variable"
+  
+- Variables
+  [9] BWT = "Birth weight in grams"
+  [150] Income_Quartile = "Median household income national quartile for patient ZIP Code"                           
+- Stay Service
+  [6] AdminType = "Admission type"
+  [49] StayService = "HCUP Observation Stay service indicator"
+  [144] TransIn = "Transfer in indicator"
+  [145] TransOut = "Transfer out indicator"
+  
+- Diagnosis
+  [22-46] Diagnosis_N = "Diagnosis N, present on admission indicator"  
+  [54-96] ICD_N = "ICD Code"
+ 
+ 
+### [Mute] Compute the range for the "Birth year" column
+ col_range <- NY_pq %>%
+  select(`Birth year`) %>%  
+  collect() %>%            
+  pull() %>%              
+  range(na.rm = TRUE) 
+  
+### [Mute] Display the range
+col_range # Result: 1894 2019, 
+
+
+### [Mute] Cohort 1 include every variables I need, birthday already fixed from 2014-2020
+
+ NY_cohort1 <- NY_pq_df %>%
+  rename(
+# Basic and birthday
+    ID = 'Visit linkage variable',
+    Amonth = 'Admission month',
+    Ayear = 'Admission year',
+    Dhour = 'Discharge Hour',
+    Dmonth = 'Discharge month',
+    Dquarter = 'Discharge quarter',
+    Dyear = 'Calendar year',
+    Length_Of_Stay_C = 'Length of stay (cleaned)',
+    Length_Of_Stay_O = 'Length of stay (as received from source)',
+    birth_year = 'Birth year',
+    birth_month = 'Birth month',
+    admis_age_year = 'Age in years at admission',
+    admis_age_day = 'Age in days (when age < 1 year)',
+    admis_age_mon = 'Age in months (when age < 11 years)',
+    Sex = 'Indicator of sex',
+    Race = 'Race (uniform)',
+    Ethnicity = 'Hispanic ethnicity (uniform)',
+    Income_state_quartile = 'Median household income state quartile for patient ZIP Code',
+    Income_national_quartile = 'Median household income national quartile for patient ZIP Code',
+    BWT = 'Birth weight in grams',
+# Location
+    ZIP = 'Patient ZIP Code',
+    ZIP_3digits = 'Patient ZIP Code, first 3 digits',
+    Loc_CBSA = 'Patient location: Core Based Statistical Area (CBSA)',
+    Loc_UrbanRural = 'Patient Location: NCHS Urban-Rural Code',
+    Loc_UrbanInfluence = 'Patient location: Urban Influence Codes',
+    Loc_UrbanRural4Cate = 'Patient Location: Urban-Rural 4 Categories',
+    State = 'Patient State postal code',
+    State_FIPS = 'Patient state/county FIPS code',
+# Service and diagnosis
+    AdminType = "Admission type",
+    StayService = 'HCUP Observation Stay service indicator',
+    TransIn = 'Transfer in indicator',
+    TransOut = 'Transfer out indicator',
+    Death = 'Died during hospitalization',
+    Diagnosis_1 = "Diagnosis 1, present on admission indicator",
+    Diagnosis_2 = "Diagnosis 2, present on admission indicator",
+    Diagnosis_3 = "Diagnosis 3, present on admission indicator",
+    Diagnosis_4 = "Diagnosis 4, present on admission indicator",
+    Diagnosis_5 = "Diagnosis 5, present on admission indicator",
+    Diagnosis_6 = "Diagnosis 6, present on admission indicator",
+    Diagnosis_7 = "Diagnosis 7, present on admission indicator",
+    Diagnosis_8 = "Diagnosis 8, present on admission indicator",
+    Diagnosis_9 = "Diagnosis 9, present on admission indicator",
+    Diagnosis_10 = "Diagnosis 10, present on admission indicator",
+    Diagnosis_11 = "Diagnosis 11, present on admission indicator",
+    Diagnosis_12 = "Diagnosis 12, present on admission indicator",
+    Diagnosis_13 = "Diagnosis 13, present on admission indicator",
+    Diagnosis_14 = "Diagnosis 14, present on admission indicator",
+    Diagnosis_15 = "Diagnosis 15, present on admission indicator",
+    Diagnosis_16 = "Diagnosis 16, present on admission indicator",
+    Diagnosis_17 = "Diagnosis 17, present on admission indicator",
+    Diagnosis_18 = "Diagnosis 18, present on admission indicator",
+    Diagnosis_19 = "Diagnosis 19, present on admission indicator",
+    Diagnosis_20 = "Diagnosis 20, present on admission indicator",
+    Diagnosis_21 = "Diagnosis 21, present on admission indicator",
+    Diagnosis_22 = "Diagnosis 22, present on admission indicator",
+    Diagnosis_23 = "Diagnosis 23, present on admission indicator",
+    Diagnosis_24 = "Diagnosis 24, present on admission indicator",
+    Diagnosis_25 = "Diagnosis 25, present on admission indicator",
+    ICD_Admin = 'ICD-10-CM Admitting Diagnosis Code',
+    ICD_D1 = 'ICD-10-CM Diagnosis 1',
+    ICD_D2 = 'ICD-10-CM Diagnosis 2',
+    ICD_D3 = 'ICD-10-CM Diagnosis 3',
+    ICD_D4 = 'ICD-10-CM Diagnosis 4',
+    ICD_D5 = 'ICD-10-CM Diagnosis 5',
+    ICD_D6 = 'ICD-10-CM Diagnosis 6',
+    ICD_D7 = 'ICD-10-CM Diagnosis 7',
+    ICD_D8 = 'ICD-10-CM Diagnosis 8',
+    ICD_D9 = 'ICD-10-CM Diagnosis 9',
+    ICD_D10 = 'ICD-10-CM Diagnosis 10',
+    ICD_D11 = 'ICD-10-CM Diagnosis 11',
+    ICD_D12 = 'ICD-10-CM Diagnosis 12',
+    ICD_D13 = 'ICD-10-CM Diagnosis 13',
+    ICD_D14 = 'ICD-10-CM Diagnosis 14',
+    ICD_D15 = 'ICD-10-CM Diagnosis 15',
+    ICD_D16 = 'ICD-10-CM Diagnosis 16',
+    ICD_D17 = 'ICD-10-CM Diagnosis 17',
+    ICD_D18 = 'ICD-10-CM Diagnosis 18',
+    ICD_D19 = 'ICD-10-CM Diagnosis 19',
+    ICD_D20 = 'ICD-10-CM Diagnosis 20',
+    ICD_D21 = 'ICD-10-CM Diagnosis 21',
+    ICD_D22 = 'ICD-10-CM Diagnosis 22',
+    ICD_D23 = 'ICD-10-CM Diagnosis 23',
+    ICD_D24 = 'ICD-10-CM Diagnosis 24',
+    ICD_D25 = 'ICD-10-CM Diagnosis 25',
+    ICD_P1 = 'ICD-10-PCS Procedure 1',
+    ICD_D_num = 'ICD-10-CM Number of diagnoses on this record',
+    ICD_P_num = 'ICD-10-PCS Number of procedures on this record',
+    ICD_P2 = 'ICD-10-PCS Procedure 2',
+    ICD_P3 = 'ICD-10-PCS Procedure 3',
+    ICD_P4 = 'ICD-10-PCS Procedure 4',
+    ICD_P5 = 'ICD-10-PCS Procedure 5',
+    ICD_P6 = 'ICD-10-PCS Procedure 6',
+    ICD_P7 = 'ICD-10-PCS Procedure 7',
+    ICD_P8 = 'ICD-10-PCS Procedure 8',
+    ICD_P9 = 'ICD-10-PCS Procedure 9',
+    ICD_P10 = 'ICD-10-PCS Procedure 10',
+    ICD_P11 = 'ICD-10-PCS Procedure 11',
+    ICD_P12 = 'ICD-10-PCS Procedure 12',
+    ICD_P13 = 'ICD-10-PCS Procedure 13',
+    ICD_P14 = 'ICD-10-PCS Procedure 14',
+    ICD_P_type = 'ICD-10-PCS Procedure type indicator'
+  ) %>%
+  filter(!is.na(ID), BWT != '', birth_year >= 2014, birth_year <= 2020) %>%
+  select(
+    ID, birth_year, birth_month, Ayear, Amonth, admis_age_year, admis_age_mon, 
+    admis_age_day, Dhour, Dmonth, Dquarter, Dyear, Length_Of_Stay_C, Length_Of_Stay_O,
+    Sex, Race, Ethnicity, Income_state_quartile, Income_national_quartile, BWT, 
+    State, State_FIPS, ZIP, ZIP_3digits, Loc_CBSA, Loc_UrbanRural, 
+    Loc_UrbanInfluence, Loc_UrbanRural4Cate,    
+    AdminType, StayService, TransIn, TransOut, Death, 
+    Diagnosis_1, Diagnosis_2, Diagnosis_3, Diagnosis_4, Diagnosis_5, 
+    Diagnosis_6, Diagnosis_7, Diagnosis_8, Diagnosis_9, Diagnosis_10, 
+    Diagnosis_11, Diagnosis_12, Diagnosis_13, Diagnosis_14, Diagnosis_15, 
+    Diagnosis_16, Diagnosis_17, Diagnosis_18, Diagnosis_19, Diagnosis_20, 
+    Diagnosis_21, Diagnosis_22, Diagnosis_23, Diagnosis_24, Diagnosis_25, 
+    ICD_D1, ICD_D2, ICD_D3, ICD_D4, ICD_D5, 
+    ICD_D6, ICD_D7, ICD_D8, ICD_D9, ICD_D10, 
+    ICD_D11, ICD_D12, ICD_D13, ICD_D14, ICD_D15, 
+    ICD_D16, ICD_D17, ICD_D18, ICD_D19, ICD_D20, 
+    ICD_D21, ICD_D22, ICD_D23, ICD_D24, ICD_D25, 
+    ICD_P1, ICD_P2, ICD_P3, ICD_P4, ICD_P5, 
+    ICD_P6, ICD_P7, ICD_P8, ICD_P9, ICD_P10, 
+    ICD_P11, ICD_P12, ICD_P13, ICD_P14, 
+    ICD_Admin, ICD_D_num, ICD_P_num, ICD_P_type
+  ) %>%
+  collect()
+
+# Save the dataset to an RDS file
+saveRDS(NY_cohort1, '/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/total_cohort.rds')
+
+
+### Skip all former steps, direct write in total cohort as NY_cohort1
+```{r}
+NY_cohort1 <- readRDS("/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/total_cohort.rds")
+```
+
+### Cohort 2 add on: age_norm ; rsv_indi and details using ICD code
+```{r}
+
+# Turn age to numeric and normalize to day unit
+
+NY_cohort2 <- NY_cohort1 %>%
+  # Filter out rows with non-numeric values
+  filter(
+    !admis_age_year %in% c( "A", "B", "C"),
+    !admis_age_mon %in% c( "A", "B", "C"),
+    !admis_age_day %in% c( "A", "B", "C")
+  ) %>%
+  # Convert columns to numeric after filtering
+  mutate(
+    admis_age_year = as.numeric(admis_age_year),
+    admis_age_mon = as.numeric(admis_age_mon),
+    admis_age_day = as.numeric(admis_age_day),
+  )
+
+NY_cohort3 <- NY_cohort2 %>%
+  filter(
+    admis_age_year < 2 | is.na(admis_age_year),
+    admis_age_mon < 24 | is.na(admis_age_mon),
+    admis_age_day < 730 | is.na(admis_age_day)
+  ) %>%
+  filter(
+    !is.na(admis_age_year) | !is.na(admis_age_mon) | !is.na(admis_age_day)
+  ) %>%
+  mutate(
+    admis_age_norm = pmax(
+      admis_age_year * 365.25,
+      admis_age_mon * 30.44,
+      admis_age_day,
+      na.rm = TRUE
+    )
+  )
+
+# RSV indicator as a new column
+NY_cohort3 <- NY_cohort3 %>%
+  mutate(
+    rsv_bronchitis = if_any(`ICD_D1`:`ICD_D25`, ~ . == "J205"),
+    rsv_bronchiolitis = if_any(`ICD_D1`:`ICD_D25`, ~ . == "J210"),
+    rsv_pneumonia = if_any(`ICD_D1`:`ICD_D25`, ~ . == "J121"),
+    rsv_cause_of_disease = if_any(`ICD_D1`:`ICD_D25`, ~ . == "B974")
+  ) %>%
+  mutate(across(starts_with("rsv_"), as.integer)) %>% # Convert logical to 1/0
+  mutate(
+    rsv_indi = if_else(
+      rsv_bronchitis == 1 | rsv_bronchiolitis == 1 | rsv_pneumonia == 1 | rsv_cause_of_disease == 1, 1,
+      0
+    )
+  )
+
+```
+
+### [Mute] Discharge_check
+Discharge_check <- NY_cohort3 %>%
+  select(ID, birth_year, birth_month, 
+  admis_age_year, admis_age_mon, admis_age_day, admis_age_norm, 
+  Length_Of_Stay_C, Length_Of_Stay_O)
+
+### Finds rsv encounters each patient has and flag as 1, count number
+```{r}
+NY_cohort4 <- NY_cohort3 %>%
+  mutate(across(
+    ICD_D1:ICD_D25,
+    ~ ifelse(. %in% c("J205", "J210", "J121", "B974"), 1, 0),
+    .names = "rsv_{.col}"
+  )) %>%
+  select(everything(), starts_with("rsv_ICD"), rsv_indi)
+
+# Total encounter of RSV
+NY_cohort4 <- NY_cohort4 %>%
+  mutate(rsv_num = rowSums(select(., starts_with("rsv_ICD"))))
+```
+
+### Flag rows of patient who were admitted with rsv
+```{r}
+NY_cohort4 <- NY_cohort4 %>%
+  mutate(across(starts_with("Diagnosis_"), ~ as.integer(. == "Y"), .names = "check_{.col}"))
+
+NY_cohort4 <- NY_cohort4 %>%
+  rowwise() %>%
+  mutate(
+    rsv_admis = if_else(
+      any(c_across(rsv_ICD_D1:rsv_ICD_D25) == 1 & c_across(check_Diagnosis_1:check_Diagnosis_25) == 1),
+      1,
+      0
+    )
+  ) %>%
+  ungroup()
+
+saveRDS(NY_cohort4, '/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/NY_cohort4.rds')
+```
+
+### Just to make sure the rsv_admis is coded correct
+rsv_check <- NY_cohort4 %>%
+  select(
+    ID, rsv_admis,
+    rsv_ICD_D1, check_Diagnosis_1,
+    rsv_ICD_D2, check_Diagnosis_2,
+    rsv_ICD_D3, check_Diagnosis_3,
+    rsv_ICD_D4, check_Diagnosis_4,
+    rsv_ICD_D5, check_Diagnosis_5,
+    rsv_ICD_D6, check_Diagnosis_6,
+    rsv_ICD_D7, check_Diagnosis_7,
+    rsv_ICD_D8, check_Diagnosis_8,
+    rsv_ICD_D9, check_Diagnosis_9,
+    rsv_ICD_D10, check_Diagnosis_10,
+    rsv_ICD_D11, check_Diagnosis_11,
+    rsv_ICD_D12, check_Diagnosis_12,
+    rsv_ICD_D13, check_Diagnosis_13,
+    rsv_ICD_D14, check_Diagnosis_14,
+    rsv_ICD_D15, check_Diagnosis_15,
+    rsv_ICD_D16, check_Diagnosis_16,
+    rsv_ICD_D17, check_Diagnosis_17,
+    rsv_ICD_D18, check_Diagnosis_18,
+    rsv_ICD_D19, check_Diagnosis_19,
+    rsv_ICD_D20, check_Diagnosis_20,
+    rsv_ICD_D21, check_Diagnosis_21,
+    rsv_ICD_D22, check_Diagnosis_22,
+    rsv_ICD_D23, check_Diagnosis_23,
+    rsv_ICD_D24, check_Diagnosis_24,
+    rsv_ICD_D25, check_Diagnosis_25
+  )
+
+###
+```{r}
+
+all_birth <- NY_cohort4 %>%
+  select(ID, birth_year, birth_month)
+
+rsv_diagnosis_vari <- NY_cohort4 %>%
+  select(ID, Ayear, Amonth, Dyear, Dmonth, admis_age_norm, rsv_admis, rsv_indi, Sex, Race, Ethnicity, Income_state_quartile, Income_national_quartile, BWT,ZIP)
+
+
+saveRDS(all_birth, '/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/all_birth.rds')
+saveRDS(rsv_diagnosis_vari, '/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/rsv_diagnosis_vari.rds')
+```
+
+### Whole KM curve
+```{r}
+km_data <- merge(all_birth, rsv_diagnosis_vari, by = "ID")
+
+km_data <- km_data %>%
+  mutate(
+    go_to_event = if_else(
+      rsv_admis == 1,
+      (Ayear - birth_year) * 12 + (Amonth - birth_month),
+      (Dyear - birth_year) * 12 + (Dmonth - birth_month)
+    )
+  )
+
+# Create a survival object
+surv_obj <- Surv(time = km_data$go_to_event, event = km_data$rsv_admis)
+
+# Fit the KM model
+km_fit <- survfit(surv_obj ~ 1, data = km_data)
+
+# Plot the KM curve
+ggsurvplot(km_fit, km_data = km_data, conf.int = TRUE, risk.table = TRUE,
+           xlab = "Time (Months)", ylab = "Survival Probability")
+
+```
+
+# Variables clean up
+```{r}
+km_data <- km_data %>%
+  mutate(
+    Sex = case_when(
+      Sex == "0" ~ "Male",
+      Sex == "1" ~ "Female",
+      TRUE ~ NA_character_
+    ),
+    Race = case_when(
+      Race == "1" ~ "White",
+      Race == "2" ~ "Black",
+      Race == "3" ~ "Hispanic",
+      Race == "4" ~ "Asian or Pacific Islander",
+      Race == "5" ~ "Native American",
+      Race == "6" ~ "Other",
+      TRUE ~ NA_character_
+    ),
+    Ethnicity = case_when(
+      Ethnicity == 0 ~ "Not Hispanic",
+      Ethnicity == 1 ~ "Hispanic, White",
+      Ethnicity == 2 ~ "Hispanic, Black",
+      Ethnicity == 3 ~ "Hispanic, Other Race",
+      Ethnicity == 4 ~ "Hispanic, Unspecified Race",
+      TRUE ~ NA_character_ 
+    ),
+    N_Quartile = case_when(
+      Income_national_quartile == 1 ~ "First Quartile",
+      Income_national_quartile == 2 ~ "Second Quartile",
+      Income_national_quartile == 3 ~ "Third Quartile",
+      Income_national_quartile == 4 ~ "Fourth Quartile",
+      TRUE ~ NA_character_ 
+    ),
+    S_Quartile = case_when(
+      Income_state_quartile == 1 ~ "First Quartile",
+      Income_state_quartile == 2 ~ "Second Quartile",
+      Income_state_quartile == 3 ~ "Third Quartile",
+      Income_state_quartile == 4 ~ "Fourth Quartile",
+      TRUE ~ NA_character_ 
+    )
+  )
+```
+
+```{r}
+km_data$Sex <- as.factor(km_data$Sex)
+km_data$Race <- as.factor(km_data$Race)
+km_data$Ethnicity <- as.factor(km_data$Ethnicity)
+km_data$N_Quartile <- as.factor(km_data$N_Quartile)
+km_data$S_Quartile <- as.factor(km_data$S_Quartile)
+
+```
+
+```{r}
+# Fit the KM model stratified by Sex
+km_fit_sex <- survfit(surv_obj ~ Sex, data = km_data)
+
+# Plot the KM curve stratified by Sex
+ggsurvplot(
+  km_fit_sex,
+  data = km_data,
+  conf.int = TRUE,
+  risk.table = TRUE,
+  xlab = "Time (Months)",
+  ylab = "Survival Probability",
+  title = "Kaplan-Meier Curve Stratified by Sex"
+)
+```
+```{r}
+# Fit the KM model stratified by Race
+km_fit_race <- survfit(surv_obj ~ Race, data = km_data)
+
+# Plot the KM curve stratified by Race
+ggsurvplot(
+  km_fit_race,
+  data = km_data,
+  conf.int = TRUE,
+  risk.table = TRUE,
+  xlab = "Time (Months)",
+  ylab = "Survival Probability",
+  title = "Kaplan-Meier Curve Stratified by Race"
+)
+```
+```{r}
+# Fit the KM model stratified by Race
+km_fit_ethnicity <- survfit(surv_obj ~ Ethnicity, data = km_data)
+
+# Plot the KM curve stratified by Race
+ggsurvplot(
+  km_fit_ethnicity,
+  data = km_data,
+  conf.int = TRUE,
+  risk.table = TRUE,
+  xlab = "Time (Months)",
+  ylab = "Survival Probability",
+  title = "Kaplan-Meier Curve Stratified by Ethnicity"
+)
+```
+
+```{r}
+# Fit the KM model stratified by Race
+km_fit_n_income_Quartile <- survfit(surv_obj ~ N_Quartile, data = km_data)
+
+# Plot the KM curve stratified by Race
+ggsurvplot(
+  km_fit_n_income_Quartile,
+  data = km_data,
+  conf.int = TRUE,
+  risk.table = TRUE,
+  xlab = "Time (Months)",
+  ylab = "Survival Probability",
+  title = "Kaplan-Meier Curve Stratified by National Income Quartile"
+)
+```
+```{r}
+# Fit the KM model stratified by Race
+km_fit_s_income_Quartile <- survfit(surv_obj ~ S_Quartile, data = km_data)
+
+# Plot the KM curve stratified by Race
+ggsurvplot(
+  km_fit_s_income_Quartile,
+  data = km_data,
+  conf.int = TRUE,
+  risk.table = TRUE,
+  xlab = "Time (Months)",
+  ylab = "Survival Probability",
+  title = "Kaplan-Meier Curve Stratified by State Income Quartile"
+)
+```
