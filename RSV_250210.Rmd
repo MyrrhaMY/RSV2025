@@ -1,0 +1,433 @@
+---
+title: "RSV_250131"
+---
+
+### load in packages
+```{r}
+library(arrow)
+library(dplyr)
+library(survival)
+library(survminer)
+library(tidyr)
+```
+
+### read in parquet database
+```{r}
+# count: 9359293
+NY_pq <- open_dataset("/Volumes/home/HCUPdata-CC0941-MEDSPH/ParquetData/NY", format = "parquet")
+NY_pq_df <- as.data.frame(NY_pq)
+```
+
+# Check birth year distribution of the infants.
+```{r}
+NY_pq_df %>%
+  filter(`Birth year` %in% c(2016, 2017, 2018, 2019)) %>% 
+  mutate(BWT_category = case_when(
+    `Birth weight in grams` == "" ~ "Empty",
+    `Birth weight in grams` == "A" ~ "A",
+    suppressWarnings(!is.na(as.numeric(`Birth weight in grams`))) ~ "Numeric",
+    TRUE ~ "Other"
+  )) %>%
+  group_by(`Birth year`, BWT_category) %>%
+  summarise(distinct_visits = n_distinct(`Visit linkage variable`), .groups = "drop") %>% 
+  arrange(`Birth year`)
+
+```
+
+
+```{r}
+# count: 840841
+NY_cohort1 <- NY_pq_df %>%
+  select('Visit linkage variable', 'Birth year', 'Birth month', 'Birth weight in grams') %>%
+  rename(
+    ID = 'Visit linkage variable',
+    birth_year = 'Birth year',
+    birth_month = 'Birth month',
+    BWT = 'Birth weight in grams'
+  ) %>%
+  filter(BWT != '' & !is.na(BWT)) %>%
+  distinct(ID, .keep_all = TRUE)  
+```
+
+```{r}
+# factors and details
+# count:5375860
+NY_cohort2 <- NY_pq_df %>%
+  select('Visit linkage variable', 'Birth year', 'Birth month', 'Birth weight in grams',
+         'Admission month', 'Admission year', 'Indicator of sex', 'Race (uniform)',
+         'Hispanic ethnicity (uniform)', 'Median household income state quartile for patient ZIP Code',
+         'Median household income national quartile for patient ZIP Code', 'Patient ZIP Code',
+         'Patient ZIP Code, first 3 digits', 'Patient State postal code', 'Died during hospitalization',
+         'Calendar year','Discharge month','Age in years at admission','Age in days (when age < 1 year)','Age in months (when age < 11 years)',
+         starts_with("Diagnosis"), starts_with("ICD-10-CM Diagnosis")) %>%
+  rename(
+    # Basic details
+    ID = 'Visit linkage variable',
+    Amonth = 'Admission month',
+    Ayear = 'Admission year',
+    birth_year = 'Birth year',
+    birth_month = 'Birth month',
+    BWT = 'Birth weight in grams',
+    Sex = 'Indicator of sex',
+    Race = 'Race (uniform)',
+    Ethnicity = 'Hispanic ethnicity (uniform)',
+    Income_state_quartile = 'Median household income state quartile for patient ZIP Code',
+    Income_national_quartile = 'Median household income national quartile for patient ZIP Code',
+    ZIP = 'Patient ZIP Code',
+    ZIP_3digits = 'Patient ZIP Code, first 3 digits',
+    State = 'Patient State postal code',
+    Death = 'Died during hospitalization',
+    Dyear = 'Calendar year',
+    Dmonth = 'Discharge month',
+    admis_age_year = 'Age in years at admission',
+    admis_age_day = 'Age in days (when age < 1 year)',
+    admis_age_mon = 'Age in months (when age < 11 years)',
+  ) %>%
+  distinct(ID, .keep_all = TRUE) %>%
+  collect()
+```
+
+```{r}
+# Kept only rows with BWT data and distincted
+# 840841
+NY_merged <- NY_cohort1 %>%
+  left_join(NY_cohort2, by = "ID")
+
+saveRDS(NY_merged, '/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/NY_merged_20250131.rds')
+```
+
+# # # 
+```{r}
+NY_merged <- readRDS("/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/NY_merged_20250131.rds")
+```
+
+
+```{r}
+NY_merged %>%
+  count(birth_year.x) %>%
+  filter(birth_year.x %in% c(2014, 2015, 2016, 2017, 2018, 2019)) %>%
+  print()
+
+# State number: 
+# 2016 - 232,663
+# 2017 - 228,501
+# 2018 - 225,162
+# 2019 - 220,536
+
+# Database number:
+# 2016 - 220,343	
+# 2017 - 214,468
+# 2018 - 194,315	
+# 2019 - 192,325	
+```
+```{r}
+NY_merged %>%
+  count(Dyear) %>%
+  filter(Dyear %in% c(2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021)) %>%
+  print()
+```
+
+=======
+
+```{r}
+# Turn age to numeric and normalize to day unit
+NY_cohort3 <- NY_merged %>% 
+  mutate(
+    admis_age_year = if_else(admis_age_year %in% c("A", "B", "C"), NA_character_, admis_age_year),
+    admis_age_mon = if_else(admis_age_mon %in% c("A", "B", "C"), NA_character_, admis_age_mon),
+    admis_age_day = if_else(admis_age_day %in% c("A", "B", "C"), NA_character_, admis_age_day)
+  ) %>%
+  mutate(
+    admis_age_year = as.numeric(admis_age_year),
+    admis_age_mon = as.numeric(admis_age_mon),
+    admis_age_day = as.numeric(admis_age_day)
+  )
+
+# make sure only infant <2 years are included
+NY_cohort4 <- NY_cohort3 %>% 
+  mutate(
+    admis_age_year = if_else(admis_age_year > 2, NA_real_, admis_age_year),
+    admis_age_mon = if_else(admis_age_mon > 24, NA_real_, admis_age_mon),
+    admis_age_day = if_else(admis_age_day > 730, NA_real_, admis_age_day),
+    
+    admis_age_norm = pmax(
+      admis_age_year * 365.25,
+      admis_age_mon * 30.44,
+      admis_age_day,
+      na.rm = TRUE
+    )
+  ) 
+
+```
+
+### Finds rsv encounters each patient has and flag as 1, count number
+```{r}
+# Step 1: Rename ICD columns to a simpler format
+NY_cohort4 <- NY_cohort4 %>%
+  rename_with(~ gsub("ICD-10-CM Diagnosis ", "ICD_", .), starts_with("ICD-10-CM Diagnosis"))
+NY_cohort4 <- NY_cohort4 %>%
+  rename_with(~ gsub("Diagnosis (\\d+), present on admission indicator", "Diag_admis_\\1", .), everything())
+```
+
+```{r}
+saveRDS(NY_cohort4, '/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/NY_cohort4_20250210.rds')
+```
+
+```{r}
+NY_cohort4 <- readRDS("/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/NY_cohort4_20250210.rds")
+```
+
+### RSV indi [Problem need to be solved]
+```{r}
+# RSV indicator as a new column
+NY_cohort4 <- NY_cohort4 %>%
+  mutate(
+    rsv_bronchitis = as.integer(rowSums(across(ICD_1:ICD_25, ~ . == "J205"), na.rm = TRUE) > 0),
+    rsv_bronchiolitis = as.integer(rowSums(across(ICD_1:ICD_25, ~ . == "J210"), na.rm = TRUE) > 0),
+    rsv_pneumonia = as.integer(rowSums(across(ICD_1:ICD_25, ~ . == "J121"), na.rm = TRUE) > 0),
+    rsv_cause_of_disease = as.integer(rowSums(across(ICD_1:ICD_25, ~ . == "B974"), na.rm = TRUE) > 0),
+    rsv_indi = as.integer(rsv_bronchitis + rsv_bronchiolitis + rsv_pneumonia + rsv_cause_of_disease > 0)
+  )
+```
+
+```{r}
+NY_cohort4 %>%
+  summarise(
+    total = n(),
+    rsv_bronchitis = sum(rsv_bronchitis, na.rm = TRUE),
+    rsv_bronchiolitis = sum(rsv_bronchiolitis, na.rm = TRUE),
+    rsv_pneumonia = sum(rsv_pneumonia, na.rm = TRUE),
+    rsv_cause_of_disease = sum(rsv_cause_of_disease, na.rm = TRUE),
+    rsv_indi = sum(rsv_indi, na.rm = TRUE)
+  ) %>%
+  pivot_longer(cols = -total, names_to = "RSV_Type", values_to = "Count") %>%
+  mutate(Percentage = (Count / total) * 100) %>%
+  select(RSV_Type, Count, Percentage) %>%
+  print()
+```
+
+
+```{r}
+# Step 2: Convert RSV-related ICD codes to binary indicators
+NY_cohort5 <- NY_cohort4 %>%
+  mutate(across(
+    starts_with("ICD_"),
+    ~ ifelse(. %in% c("J205", "J210", "J121", "B974"), 1, 0),
+    .names = "rsv_{.col}"
+  ))
+
+# Exclude columns that are no longer needed
+NY_cohort5 <- NY_cohort5 %>%
+  select(-all_of(paste0("ICD_", 1:25)))
+```
+
+
+# Total encounter of RSV
+NY_cohort5 <- NY_cohort5 %>%
+  mutate(rsv_num = rowSums(select(., starts_with("rsv_ICD"))))
+NY_cohort5 <- NY_cohort5 %>%
+  select(-all_of(paste0("rsv_ICD_", 1:25)))
+
+
+### Flag rows of patient who were admitted with rsv
+```{r}
+NY_cohort5 <- NY_cohort5 %>%
+  mutate(across(starts_with("Diag_admis_"), ~ as.integer(. == "Y"), .names = "check_{.col}")) 
+
+# Exclude columns that are no longer needed
+NY_cohort5 <- NY_cohort5 %>%
+  select(-all_of(paste0("Diag_admis_", 1:25)))
+```
+
+
+```{r}
+# Flag people got RSV before admission
+NY_cohort5 <- NY_cohort5 %>%
+  mutate(
+    rsv_admis = as.integer(
+      rowSums(
+        select(., starts_with("rsv_ICD_")) * select(., starts_with("check_Diag_")) > 0,
+        na.rm = TRUE
+      ) > 0
+    )
+  )
+```
+
+```{r}
+# Exclude columns that are no longer needed
+NY_cohort6 <- NY_cohort5 %>%
+  select(-all_of(paste0("check_Diag_admis_", 1:25)))
+NY_cohort6 <- NY_cohort6 %>%
+  select(-all_of(paste0("rsv_ICD_", 1:25)))
+
+NY_cohort6 <- NY_cohort6 %>%
+  select(-birth_year.y, -birth_month.y) %>% 
+  rename(
+    birth_year = birth_year.x, 
+    birth_month = birth_month.x 
+  )
+
+```
+
+# QUESTION: ALL INFANT GOT RSV BEFORE ADMISSION???
+count_mismatch <- sum(NY_cohort6$rsv_admis != NY_cohort6$rsv_indic, na.rm = TRUE)
+print(count_mismatch)
+
+```{r}
+saveRDS(NY_cohort6, '/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/NY_cohort6_20250210.rds')
+```
+
+```{r}
+NY_cohort6 <- readRDS("/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/NY_cohort6_20250210.rds")
+```
+
+
+### KM Curve
+```{r}
+# Filter out rows where birth_year < 2014 count:821135
+NY_cohort7 <- NY_cohort6 %>% filter(birth_year >= 2014)
+```
+
+```{r}
+# Create start and end time in YYYY.MM format
+NY_cohort7 <- NY_cohort7 %>% 
+  mutate(start_time = birth_year + birth_month / 12,
+         end_time = ifelse(rsv_admis == 1, Ayear + Amonth / 12, Dyear + Dmonth / 12),
+         time_to_event = end_time - start_time)
+
+# Create survival object
+surv_obj <- Surv(time = NY_cohort7$time_to_event, event = NY_cohort7$rsv_admis)
+
+# Fit Kaplan-Meier model
+km_fit <- survfit(surv_obj ~ 1, data = NY_cohort7)
+
+# Plot KM curve
+ggsurvplot(km_fit, 
+           data = NY_cohort7, 
+           xlab = "Time in Years", 
+           ylab = "Survival Probability", 
+           title = "Kaplan-Meier Curve for RSV Patients", 
+           conf.int = TRUE,
+           risk.table = TRUE)  # Ensures the risk table is properly displayed
+```
+# Variables clean up
+```{r}
+NY_cohort7 <- NY_cohort7 %>%
+  mutate(
+    Sex = case_when(
+      Sex == "0" ~ "Male",
+      Sex == "1" ~ "Female",
+      TRUE ~ NA_character_
+    ),
+    Race = case_when(
+      Race == "1" ~ "White",
+      Race == "2" ~ "Black",
+      Race == "3" ~ "Hispanic",
+      Race == "4" ~ "Asian or Pacific Islander",
+      Race == "5" ~ "Native American",
+      Race == "6" ~ "Other",
+      TRUE ~ NA_character_
+    ),
+    Ethnicity = case_when(
+      Ethnicity == 0 ~ "Not Hispanic",
+      Ethnicity == 1 ~ "Hispanic, White",
+      Ethnicity == 2 ~ "Hispanic, Black",
+      Ethnicity == 3 ~ "Hispanic, Other Race",
+      Ethnicity == 4 ~ "Hispanic, Unspecified Race",
+      TRUE ~ NA_character_ 
+    ),
+    N_Quartile = case_when(
+      Income_national_quartile == 1 ~ "First Quartile",
+      Income_national_quartile == 2 ~ "Second Quartile",
+      Income_national_quartile == 3 ~ "Third Quartile",
+      Income_national_quartile == 4 ~ "Fourth Quartile",
+      TRUE ~ NA_character_ 
+    ),
+    S_Quartile = case_when(
+      Income_state_quartile == 1 ~ "First Quartile",
+      Income_state_quartile == 2 ~ "Second Quartile",
+      Income_state_quartile == 3 ~ "Third Quartile",
+      Income_state_quartile == 4 ~ "Fourth Quartile",
+      TRUE ~ NA_character_ 
+    )
+  )
+```
+
+```{r}
+# Fit the KM model stratified by Sex
+km_fit_sex <- survfit(surv_obj ~ Sex, data = NY_cohort7)
+# Plot the KM curve stratified by Sex
+ggsurvplot(
+  km_fit_sex,
+  data = NY_cohort7,
+  conf.int = TRUE,
+  risk.table = TRUE,
+  xlab = "Time (Year)",
+  ylab = "Survival Probability",
+  title = "Kaplan-Meier Curve Stratified by Sex"
+)
+```
+
+
+```{r}
+# Fit the KM model stratified by Race
+km_fit_race <- survfit(surv_obj ~ Race, data = NY_cohort7)
+# Plot the KM curve stratified by Race
+ggsurvplot(
+  km_fit_race,
+  data = NY_cohort7,
+  conf.int = TRUE,
+  risk.table = TRUE,
+  xlab = "Time (Year)",
+  ylab = "Survival Probability",
+  title = "Kaplan-Meier Curve Stratified by Race"
+)
+```
+
+```{r}
+# Fit the KM model stratified by Race
+km_fit_ethnicity <- survfit(surv_obj ~ Ethnicity, data = NY_cohort7)
+
+# Plot the KM curve stratified by Race
+ggsurvplot(
+  km_fit_ethnicity,
+  data = NY_cohort7,
+  conf.int = TRUE,
+  risk.table = TRUE,
+  xlab = "Time (Year)",
+  ylab = "Survival Probability",
+  title = "Kaplan-Meier Curve Stratified by Ethnicity"
+)
+```
+
+```{r}
+# Fit the KM model stratified by Race
+km_fit_n_income_Quartile <- survfit(surv_obj ~ N_Quartile, data = NY_cohort7)
+
+# Plot the KM curve stratified by Race
+ggsurvplot(
+  km_fit_n_income_Quartile,
+  data = NY_cohort7,
+  conf.int = TRUE,
+  risk.table = TRUE,
+  xlab = "Time (Year)",
+  ylab = "Survival Probability",
+  title = "Kaplan-Meier Curve Stratified by National Income Quartile"
+)
+```
+
+```{r}
+# Fit the KM model stratified by Race
+km_fit_s_income_Quartile <- survfit(surv_obj ~ S_Quartile, data = NY_cohort7)
+
+# Plot the KM curve stratified by Race
+ggsurvplot(
+  km_fit_s_income_Quartile,
+  data = NY_cohort7,
+  conf.int = TRUE,
+  risk.table = TRUE,
+  xlab = "Time (Year)",
+  ylab = "Survival Probability",
+  title = "Kaplan-Meier Curve Stratified by State Income Quartile"
+)
+```
