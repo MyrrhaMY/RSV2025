@@ -160,7 +160,7 @@ NY_cohort2_J219 <- readRDS('/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/NY_
 NY_cohort2_J121 <- readRDS('/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/NY_cohort2_J121_250211')
 NY_cohort2_B974 <- readRDS('/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/NY_cohort2_B974_250211')
 
-# merge, limit id to infant <2ys
+# merge, limit id to infant <=2ys
 ```{r}
 NY_cohort2_3 <- NY_cohort1 %>%
   left_join(NY_cohort2_B974, by = "ID") %>%
