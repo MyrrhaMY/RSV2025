@@ -1,0 +1,189 @@
+---
+title: "RSV_Cohort_Explore_250211"
+output: pdf_document
+date: "2025-02-11"
+---
+```{r}
+# count: 9359293
+NY_pq <- open_dataset("/Volumes/home/HCUPdata-CC0941-MEDSPH/ParquetData/NY", format = "parquet")
+NY_pq_df <- as.data.frame(NY_pq)
+```
+
+```{r}
+# count: 840841
+NY_cohort1 <- NY_pq_df %>%
+  select('Visit linkage variable', 'Birth year', 'Birth month', 'Birth weight in grams') %>%
+  rename(
+    ID = 'Visit linkage variable',
+    birth_year = 'Birth year',
+    birth_month = 'Birth month',
+    BWT = 'Birth weight in grams'
+  ) %>%
+  filter(BWT != '' & !is.na(BWT)) %>%
+  distinct(ID, .keep_all = TRUE)  
+```
+
+```{r Mian change: Kept duplicated rolls}
+# factors and details
+# count:9,359,293
+NY_cohort2_2 <- NY_pq_df %>%
+  select(`Visit linkage variable`, `Birth year`, `Birth month`, `Birth weight in grams`,
+         `Admission month`, `Admission year`, `Indicator of sex`, `Race (uniform)`,
+         `Hispanic ethnicity (uniform)`, `Median household income state quartile for patient ZIP Code`,
+         `Median household income national quartile for patient ZIP Code`, `Patient ZIP Code`,
+         `Patient ZIP Code, first 3 digits`, `Patient State postal code`, `Died during hospitalization`,
+         `Calendar year`, `Discharge month`, `Age in years at admission`, `Age in days (when age < 1 year)`,
+         `Age in months (when age < 11 years)`, starts_with("Diagnosis"), starts_with("ICD-10-CM Diagnosis")) %>%
+  rename(
+    # Basic details
+    ID = `Visit linkage variable`,
+    Amonth = `Admission month`,
+    Ayear = `Admission year`,
+    birth_year = `Birth year`,
+    birth_month = `Birth month`,
+    BWT = `Birth weight in grams`,
+    Sex = `Indicator of sex`,
+    Race = `Race (uniform)`,
+    Ethnicity = `Hispanic ethnicity (uniform)`,
+    Income_state_quartile = `Median household income state quartile for patient ZIP Code`,
+    Income_national_quartile = `Median household income national quartile for patient ZIP Code`,
+    ZIP = `Patient ZIP Code`,
+    ZIP_3digits = `Patient ZIP Code, first 3 digits`,
+    State = `Patient State postal code`,
+    Death = `Died during hospitalization`,
+    Dyear = `Calendar year`,
+    Dmonth = `Discharge month`,
+    admis_age_year = `Age in years at admission`,
+    admis_age_day = `Age in days (when age < 1 year)`,
+    admis_age_mon = `Age in months (when age < 11 years)`
+  )
+```
+
+# Separate and treat each ICD code separately 
+```{r}
+# rsv_bronchitis count: 
+NY_cohort2_J205 <- NY_cohort2_2 %>%
+  unite('all_icd', starts_with('ICD'), sep = ";", remove = FALSE) %>%
+  mutate(J205 = if_else(grepl('J205', all_icd), 1, 0)) %>%
+  group_by(`ID`) %>%
+  slice_max(J205, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  select(ID, J205)
+
+saveRDS(NY_cohort2_J205, '/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/NY_cohort2_J205_250211')
+```
+
+```{r}
+NY_cohort2_J210 <- NY_cohort2_2 %>%
+  unite('all_icd', starts_with('ICD'), sep = ";", remove = FALSE) %>%
+  mutate(J210 = if_else(grepl('J210', all_icd), 1, 0)) %>%
+  group_by(`ID`) %>%
+  slice_max(J210, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  select(ID, J210)
+
+saveRDS(NY_cohort2_J210, '/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/NY_cohort2_J210_250211')
+```
+
+```{r}
+NY_cohort2_J211 <- NY_cohort2_2 %>%
+  unite('all_icd', starts_with('ICD'), sep = ";", remove = FALSE) %>%
+  mutate(J211 = if_else(grepl('J211', all_icd), 1, 0)) %>%
+  group_by(`ID`) %>%
+  slice_max(J211, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  select(ID, J211)
+
+saveRDS(NY_cohort2_J211, '/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/NY_cohort2_J211_250211')
+```
+
+```{r}
+NY_cohort2_J218 <- NY_cohort2_2 %>%
+  unite('all_icd', starts_with('ICD'), sep = ";", remove = FALSE) %>%
+  mutate(J218 = if_else(grepl('J218', all_icd), 1, 0)) %>%
+  group_by(`ID`) %>%
+  slice_max(J218, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  select(ID, J218)
+
+saveRDS(NY_cohort2_J218, '/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/NY_cohort2_J218_250211')
+```
+
+```{r}
+NY_cohort2_J219 <- NY_cohort2_2 %>%
+  unite('all_icd', starts_with('ICD'), sep = ";", remove = FALSE) %>%
+  mutate(J219 = if_else(grepl('J219', all_icd), 1, 0)) %>%
+  group_by(`ID`) %>%
+  slice_max(J219, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  select(ID, J219)
+
+saveRDS(NY_cohort2_J219, '/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/NY_cohort2_J219_250211')
+```
+
+```{r}
+NY_cohort2_J121 <- NY_cohort2_2 %>%
+  unite('all_icd', starts_with('ICD'), sep = ";", remove = FALSE) %>%
+  mutate(J121 = if_else(grepl('J121', all_icd), 1, 0)) %>%
+  group_by(`ID`) %>%
+  slice_max(J121, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  select(ID, J121)
+
+saveRDS(NY_cohort2_J121, '/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/NY_cohort2_J121_250211')
+```
+
+```{r}
+NY_cohort2_B974 <- NY_cohort2_2 %>%
+  unite('all_icd', starts_with('ICD'), sep = ";", remove = FALSE) %>%
+  mutate(B974 = if_else(grepl('B974', all_icd), 1, 0)) %>%
+  group_by(`ID`) %>%
+  slice_max(B974, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  select(ID, B974)
+
+saveRDS(NY_cohort2_B974, '/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/NY_cohort2_B974_250211')
+```
+
+# load in code for future use
+NY_cohort2_J205 <- readRDS('/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/NY_cohort2_J205_250211')
+NY_cohort2_J210 <- readRDS('/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/NY_cohort2_J210_250211')
+NY_cohort2_J211 <- readRDS('/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/NY_cohort2_J211_250211')
+NY_cohort2_J218 <- readRDS('/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/NY_cohort2_J218_250211')
+NY_cohort2_J219 <- readRDS('/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/NY_cohort2_J219_250211')
+NY_cohort2_J121 <- readRDS('/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/NY_cohort2_J121_250211')
+NY_cohort2_B974 <- readRDS('/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/NY_cohort2_B974_250211')
+
+# merge, limit id to infant <2ys
+```{r}
+NY_cohort2_3 <- NY_cohort1 %>%
+  left_join(NY_cohort2_B974, by = "ID") %>%
+  left_join(NY_cohort2_J121, by = "ID") %>%
+  left_join(NY_cohort2_J205, by = "ID") %>%
+  left_join(NY_cohort2_J210, by = "ID") %>%
+  left_join(NY_cohort2_J211, by = "ID") %>%
+  left_join(NY_cohort2_J218, by = "ID") %>%
+  left_join(NY_cohort2_J219, by = "ID")
+
+NY_cohort2_3 <- NY_cohort2_3 %>%
+  mutate(
+    rsv_indi = as.integer(B974 + J121 + J205 + J210 + J211 + J218 + J219 > 0)
+  )
+```
+
+# summary
+```{r}
+count_summary <- NY_cohort2_3 %>%
+  summarise(across(c(B974, J121, J205, J210, J211, J218, J219, rsv_indi),
+                   list(count_0 = ~sum(. == 0, na.rm = TRUE),
+                        count_1 = ~sum(. == 1, na.rm = TRUE),
+                        pct_0 = ~mean(. == 0, na.rm = TRUE) * 100,
+                        pct_1 = ~mean(. == 1, na.rm = TRUE) * 100))) %>%
+  pivot_longer(cols = everything(), 
+               names_to = c("Variable", ".value"),
+               names_pattern = "(.*)_(count_0|count_1|pct_0|pct_1)")
+
+# Display table in console
+print(count_summary)
+
+```
