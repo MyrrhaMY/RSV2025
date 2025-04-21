@@ -1,0 +1,386 @@
+---
+title: "Table1"
+output: html_document
+date: "2025-04-19"
+---
+
+saveRDS(SID_rsv_filtered, '/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/SID_rsv_filtered_20250412')
+SID_rsv_filtered <- readRDS("/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/SID_rsv_filtered_20250412")
+
+
+# SID only
+```{r}
+# SID sociodemographic table
+
+library(dplyr)
+library(table1)
+
+SID_rsv_filtered_1 <- SID_rsv_filtered
+
+# Recode RSV flag
+SID_rsv_filtered_1$rsv_flag <- factor(
+  as.numeric(as.character(SID_rsv_filtered_1$rsv_flag)),
+  levels = c(0, 1),
+  labels = c("RSV negative", "RSV positive")
+)
+
+# Recode sex variable (0 = Male, 1 = Female)
+SID_rsv_filtered_1 <- SID_rsv_filtered_1 %>%
+  mutate(Sex = factor(sex, levels = c(0, 1), labels = c("Male", "Female")))
+
+# Recode race
+SID_rsv_filtered_1 <- SID_rsv_filtered_1 %>%
+  mutate(Race = case_when(
+    race == "1" ~ "White",
+    race == "2" ~ "Black",
+    race == "3" ~ "Hispanic",
+    race == "4" ~ "Asian or Pacific Islander",
+    race == "5" ~ "Native American",
+    race == "6" ~ "Other",
+    TRUE ~ "Missing"
+ )) %>%
+  mutate(Race = factor(Race, levels = c(
+    "White", 
+    "Black", 
+    "Hispanic", 
+    "Asian or Pacific Islander", 
+    "Native American", 
+    "Other"
+  )))
+
+# Recode income quartile
+SID_rsv_filtered_1 <- SID_rsv_filtered_1 %>%
+  mutate(StateIncomeQuartile = case_when(
+    income_national_quartile == 1 ~ "$1 – $47,999",
+    income_national_quartile == 2 ~ "$48,000 – $60,999",
+    income_national_quartile == 3 ~ "$61,000 – $81,999",
+    income_national_quartile == 4 ~ "$82,000 and above",
+    TRUE ~ "Missing"
+  )) %>%
+  mutate(StateIncomeQuartile = factor(StateIncomeQuartile))
+
+# Birthweight sequence
+SID_rsv_filtered_1 <- SID_rsv_filtered_1 %>%
+  mutate(Birthweight = factor(Birthweight,
+                              levels = c("Normal", "Low Birthweight", "Very Low Birthweight", "Unknown"),
+                              ordered = TRUE))
+
+# Apply variable labels
+label(SID_rsv_filtered_1$Sex) <- "Sex at Birth"
+label(SID_rsv_filtered_1$Race) <- "Race/Ethnicity"
+label(SID_rsv_filtered_1$StateIncomeQuartile) <- "State Income Quartile"
+
+# Generate Table: Birthweight as rows, RSV as columns
+table1(
+  ~ Birthweight + Sex + Race + StateIncomeQuartile | rsv_flag,
+  data = SID_rsv_filtered_1,
+  overall = "Total",
+  caption = "Table 2. Sociodemographics by RSV Status in NY Infants <2Y (SID)"
+)
+
+```
+
+
+
+saveRDS(SEDD_rsv_filtered, '/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/SEDD_rsv_filtered_')
+SEDD_rsv_filtered <- readRDS("/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/SEDD_rsv_filtered_")
+
+# SEDD only
+```{r}
+# SEDD sociodemographic table
+
+library(dplyr)
+library(table1)
+
+SEDD_rsv_filtered_1 <- SEDD_rsv_filtered_final
+
+# Recode RSV flag
+SEDD_rsv_filtered_1$rsv_flag <- factor(
+  as.numeric(as.character(SEDD_rsv_filtered_1$rsv_flag)),
+  levels = c(0, 1),
+  labels = c("RSV negative", "RSV positive")
+)
+
+# Recode sex variable (0 = Male, 1 = Female)
+SEDD_rsv_filtered_1 <- SEDD_rsv_filtered_1 %>%
+  mutate(Sex = factor(sex, levels = c(0, 1), labels = c("Male", "Female")))
+
+# Recode race
+SEDD_rsv_filtered_1 <- SEDD_rsv_filtered_1 %>%
+  mutate(Race = case_when(
+    race == "1" ~ "White",
+    race == "2" ~ "Black",
+    race == "3" ~ "Hispanic",
+    race == "4" ~ "Asian or Pacific Islander",
+    race == "5" ~ "Native American",
+    race == "6" ~ "Other",
+    TRUE ~ "Missing"
+ )) %>%
+  mutate(Race = factor(Race, levels = c(
+    "White", 
+    "Black", 
+    "Hispanic", 
+    "Asian or Pacific Islander", 
+    "Native American", 
+    "Other"
+  )))
+
+# Recode income quartile
+SEDD_rsv_filtered_1 <- SEDD_rsv_filtered_1 %>%
+  mutate(StateIncomeQuartile = case_when(
+    income_national_quartile == 1 ~ "$1 – $47,999",
+    income_national_quartile == 2 ~ "$48,000 – $60,999",
+    income_national_quartile == 3 ~ "$61,000 – $81,999",
+    income_national_quartile == 4 ~ "$82,000 and above",
+    TRUE ~ "Missing"
+  )) %>%
+  mutate(StateIncomeQuartile = factor(StateIncomeQuartile))
+
+# Birthweight sequence
+SEDD_rsv_filtered_1 <- SEDD_rsv_filtered_1 %>%
+  mutate(Birthweight = factor(Birthweight,
+                              levels = c("Normal", "Low Birthweight", "Very Low Birthweight", "Unknown"),
+                              ordered = TRUE))
+
+# Apply variable labels
+label(SEDD_rsv_filtered_1$Sex) <- "Sex at Birth"
+label(SEDD_rsv_filtered_1$Race) <- "Race/Ethnicity"
+label(SEDD_rsv_filtered_1$StateIncomeQuartile) <- "State Income Quartile"
+
+# Generate Table: Birthweight as rows, RSV as columns
+table1(
+  ~ Birthweight + Sex + Race + StateIncomeQuartile | rsv_flag,
+  data = SEDD_rsv_filtered_1,
+  overall = "Total",
+  caption = "Table 3. Sociodemographics by RSV Status in NY Infants <2Y (SEDD)"
+)
+
+```
+
+##### Run and get rsv_merge from PartA first
+# SID + SEDD # Alomost no difference to SID
+```{r}
+library(dplyr)
+library(table1)
+
+rsv_merged_1_filtered_1 <- rsv_merged_1_filtered
+
+# Recode RSV flag
+# rsv_merged_1_filtered_1$rsv_flag <- factor(
+#   as.numeric(as.character(rsv_merged_1_filtered_1$rsv_flag)),
+#   levels = c(0, 1),
+#   labels = c("RSV negative", "RSV positive")
+# )
+
+# # Recode sex variable (0 = Male, 1 = Female)
+# rsv_merged_1_filtered_1 <- rsv_merged_1_filtered_1 %>%
+#   mutate(sex = factor(sex, levels = c(0, 1), labels = c("Male", "Female")))
+
+# # Recode race using case_when
+# rsv_merged_1_filtered_1 <- rsv_merged_1_filtered_1 %>%
+#   mutate(Race = case_when(
+#     race == "1" ~ "White",
+#     race == "2" ~ "Black",
+#     race == "3" ~ "Hispanic",
+#     race == "4" ~ "Asian or Pacific Islander",
+#     race == "5" ~ "Native American",
+#     race == "6" ~ "Other",
+#     TRUE ~ "Missing"
+#   )) %>%
+#   mutate(Race = factor(Race))
+
+# # Recode income quartile using case_when
+# rsv_merged_1_filtered_1 <- rsv_merged_1_filtered_1 %>%
+#   mutate(StateIncomeQuartile = case_when(
+#     income_national_quartile == 1 ~ "$1 – $47,999",
+#     income_national_quartile == 2 ~ "$48,000 – $60,999",
+#     income_national_quartile == 3 ~ "$61,000 – $81,999",
+#     income_national_quartile == 4 ~ "$82,000 and above",
+#     TRUE ~ "Missing"
+#   )) %>%
+#   mutate(StateIncomeQuartile = factor(StateIncomeQuartile))
+
+# # Ensure Birthweight is treated as a factor
+# rsv_merged_1_filtered_1$Birthweight <- as.factor(rsv_merged_1_filtered_1$Birthweight)
+# label(rsv_merged_1_filtered_1$Birthweight) <- "Birthweight"
+# 
+# # Apply variable labels for display in table1
+# label(rsv_merged_1_filtered_1$sex) <- "Sex at Birth"
+# label(rsv_merged_1_filtered_1$Race) <- "Race/Ethnicity"
+# label(rsv_merged_1_filtered_1$StateIncomeQuartile) <- "State Income Quartile"
+
+# Generate Table 1: Birthweight as row variable, RSV as stratifying variable
+table1(
+  ~ Birthweight + Sex + Race + StateIncomeQuartile | rsv_flag,
+  data = rsv_merged_1_filtered,
+  overall = "Total",
+  caption = "Table 1. Sociodemographics by RSV Status in NY Infants <2Y"
+)
+
+```
+
+
+
+====== NY Limited
+
+```{r}
+# SID sociodemographic table
+
+library(dplyr)
+library(table1)
+
+
+SID_rsv_filtered_1_NY <- SID_rsv_filtered_1 %>%
+  left_join(zip_map, by = c("zip_3digits" = "X3.Digit.ZIP.Code"))
+
+SID_rsv_filtered_1_NY <- SID_rsv_filtered_1_NY%>%
+  filter(State.Abbreviation == "NY")
+
+# # Recode RSV flag
+# SID_rsv_filtered_1_NY$rsv_flag <- factor(
+#   as.numeric(as.character(SID_rsv_filtered_1_NY$rsv_flag)),
+#   levels = c(0, 1),
+#   labels = c("RSV negative", "RSV positive")
+# )
+
+# # Recode sex variable (0 = Male, 1 = Female)
+# SID_rsv_filtered_1_NY <- SID_rsv_filtered_1_NY %>%
+#   mutate(sex = factor(sex, levels = c(0, 1), labels = c("Male", "Female")))
+
+# # Recode race
+# SID_rsv_filtered_1_NY <- SID_rsv_filtered_1_NY %>%
+#   mutate(Race = case_when(
+#     race == "1" ~ "White",
+#     race == "2" ~ "Black",
+#     race == "3" ~ "Hispanic",
+#     race == "4" ~ "Asian or Pacific Islander",
+#     race == "5" ~ "Native American",
+#     race == "6" ~ "Other",
+#     TRUE ~ "Missing"
+#  )) %>%
+#   mutate(Race = factor(Race, levels = c(
+#     "White", 
+#     "Black", 
+#     "Hispanic", 
+#     "Asian or Pacific Islander", 
+#     "Native American", 
+#     "Other"
+#   )))
+
+# # Recode income quartile
+# SID_rsv_filtered_1_NY <- SID_rsv_filtered_1_NY %>%
+#   mutate(StateIncomeQuartile = case_when(
+#     income_national_quartile == 1 ~ "$1 – $47,999",
+#     income_national_quartile == 2 ~ "$48,000 – $60,999",
+#     income_national_quartile == 3 ~ "$61,000 – $81,999",
+#     income_national_quartile == 4 ~ "$82,000 and above",
+#     TRUE ~ "Missing"
+#   )) %>%
+#   mutate(StateIncomeQuartile = factor(StateIncomeQuartile))
+
+# Birthweight sequence
+SID_rsv_filtered_1_NY <- SID_rsv_filtered_1_NY %>%
+  mutate(Birthweight = factor(Birthweight,
+                              levels = c("Normal", "Low Birthweight", "Very Low Birthweight", "Unknown"),
+                              ordered = TRUE))
+
+# Apply variable labels
+label(SID_rsv_filtered_1_NY$sex) <- "Sex at Birth"
+label(SID_rsv_filtered_1_NY$Race) <- "Race/Ethnicity"
+label(SID_rsv_filtered_1_NY$StateIncomeQuartile) <- "State Income Quartile"
+
+# Generate Table: Birthweight as rows, RSV as columns
+table1(
+  ~ Birthweight + sex + Race + StateIncomeQuartile | rsv_flag,
+  data = SID_rsv_filtered_1_NY,
+  overall = "Total",
+  caption = "Sl Table 2. Sociodemographics by RSV Status in NY Infants <2Y (SEDD, NY Residents)"
+)
+
+```
+
+
+```{r}
+library(dplyr)
+
+SID_states <- SID_rsv_filtered_1_NY %>%
+  select(id, State.Abbreviation) %>%
+  rename(State_SID = State.Abbreviation)
+
+SEDD_rsv_filtered_1_NY <- SEDD_rsv_filtered_1 %>%
+  left_join(SID_states, by = "id")
+
+SEDD_rsv_filtered_1_NY <- SEDD_rsv_filtered_1_NY%>%
+  filter(State_SID == "NY")
+
+```
+
+```{r}
+# SEDD sociodemographic table
+
+library(dplyr)
+library(table1)
+
+
+# # Recode RSV flag
+# SEDD_rsv_filtered_1_NY$rsv_flag <- factor(
+#   as.numeric(as.character(SEDD_rsv_filtered_1_NY$rsv_flag)),
+#   levels = c(0, 1),
+#   labels = c("RSV negative", "RSV positive")
+# )
+
+# # Recode sex variable (0 = Male, 1 = Female)
+# SEDD_rsv_filtered_1_NY <- SEDD_rsv_filtered_1_NY %>%
+#   mutate(sex = factor(sex, levels = c(0, 1), labels = c("Male", "Female")))
+
+# # Recode race
+# SEDD_rsv_filtered_1_NY <- SEDD_rsv_filtered_1_NY %>%
+#   mutate(Race = case_when(
+#     race == "1" ~ "White",
+#     race == "2" ~ "Black",
+#     race == "3" ~ "Hispanic",
+#     race == "4" ~ "Asian or Pacific Islander",
+#     race == "5" ~ "Native American",
+#     race == "6" ~ "Other",
+#     TRUE ~ "Missing"
+#  )) %>%
+#   mutate(Race = factor(Race, levels = c(
+#     "White", 
+#     "Black", 
+#     "Hispanic", 
+#     "Asian or Pacific Islander", 
+#     "Native American", 
+#     "Other"
+#   )))
+
+# # Recode income quartile
+# SEDD_rsv_filtered_1_NY <- SEDD_rsv_filtered_1_NY %>%
+#   mutate(StateIncomeQuartile = case_when(
+#     income_national_quartile == 1 ~ "$1 – $47,999",
+#     income_national_quartile == 2 ~ "$48,000 – $60,999",
+#     income_national_quartile == 3 ~ "$61,000 – $81,999",
+#     income_national_quartile == 4 ~ "$82,000 and above",
+#     TRUE ~ "Missing"
+#   )) %>%
+#   mutate(StateIncomeQuartile = factor(StateIncomeQuartile))
+
+# Birthweight sequence
+SEDD_rsv_filtered_1_NY <- SEDD_rsv_filtered_1_NY %>%
+  mutate(Birthweight = factor(Birthweight,
+                              levels = c("Normal", "Low Birthweight", "Very Low Birthweight", "Unknown"),
+                              ordered = TRUE))
+
+# Apply variable labels
+label(SEDD_rsv_filtered_1_NY$sex) <- "Sex at Birth"
+label(SEDD_rsv_filtered_1_NY$Race) <- "Race/Ethnicity"
+label(SEDD_rsv_filtered_1_NY$StateIncomeQuartile) <- "State Income Quartile"
+
+# Generate Table: Birthweight as rows, RSV as columns
+table1(
+  ~ Birthweight + sex + Race + StateIncomeQuartile | rsv_flag,
+  data = SEDD_rsv_filtered_1_NY,
+  overall = "Total",
+  caption = "Table 2. Sociodemographics by RSV Status in NY Infants <2Y (SEDD, NY Residents)"
+)
+
+```

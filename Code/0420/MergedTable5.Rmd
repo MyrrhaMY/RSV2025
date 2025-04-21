@@ -1,0 +1,691 @@
+---
+title: "MergedTable4" - First step
+output: html_document
+date: "2025-03-06"
+---
+```{r}
+library(arrow)
+library(dplyr)
+library(survival)
+library(survminer)
+library(tidyr)
+library(stringr)
+```
+
+# SID parquet
+```{r}
+# # count: 9359293
+# NY_pq <- open_dataset("/Volumes/home/HCUPdata-CC0941-MEDSPH/ParquetData/NY", format = "parquet")
+```
+
+# birth cohort, query from SID table
+```{r}
+# NY_cohort1 <- NY_pq %>%
+#   select('Visit linkage variable', 'Birth year', 'Birth month', 'Birth weight in grams') %>%
+#   rename(
+#     ID = 'Visit linkage variable',
+#     birth_year = 'Birth year',
+#     birth_month = 'Birth month',
+#     BWT = 'Birth weight in grams'
+#   ) %>%
+#   filter(BWT != '' & !is.na(BWT) & !is.na(ID)) %>%
+#   collect() %>%
+#   distinct(ID, .keep_all = TRUE) %>%
+#   collect()
+# 
+# # lower case for easy join
+# NY_cohort1 <- NY_cohort1 %>%
+#   rename_with(tolower)
+```
+
+# SID Total pop
+```{r}
+# # Convert column names to lowercase before processing
+# NY_pq <- NY_pq %>%
+#   rename_with(tolower)
+# 
+# # Select relevant columns (ensuring all column names are lowercase)
+# SID_rsv_cases <- NY_pq %>%
+#   select(
+#     `visit linkage variable`, `birth year`, `birth month`, `admission month`, 
+#     `admission year`, `indicator of sex`, `race (uniform)`, `hispanic ethnicity (uniform)`, 
+#     `median household income national quartile for patient zip code`, 
+#     `patient zip code, first 3 digits`, `age in years at admission`, `patient zip code`,
+#     `age in months (when age < 11 years)`, `age in days (when age < 1 year)`, 
+#     starts_with("diagnosis"), starts_with("icd-10-cm diagnosis")  
+#   ) %>%
+#   collect() %>%  
+#   rename(
+#     # Basic details (using lowercase column names after renaming)
+#     id = `visit linkage variable`,
+#     amonth = `admission month`,
+#     ayear = `admission year`,
+#     birth_year = `birth year`,
+#     birth_month = `birth month`,
+#     sex = `indicator of sex`,
+#     race = `race (uniform)`,
+#     ethnicity = `hispanic ethnicity (uniform)`,
+#     income_national_quartile = `median household income national quartile for patient zip code`,
+#     zip = `patient zip code`,
+#     zip_3digits = `patient zip code, first 3 digits`,
+#     admis_age_year = `age in years at admission`,
+#     admis_age_day = `age in days (when age < 1 year)`,
+#     admis_age_mon = `age in months (when age < 11 years)`
+#   )%>%
+#   # Ensure `Ayear` and `Amonth` are numeric
+#   mutate(across(c(ayear, amonth), as.numeric)) %>%
+#   mutate(
+#     date = ayear + amonth / 12,  
+#     # Create `all_icd` by pasting all `I10_DX` columns together
+#     all_icd = apply(select(., starts_with("icd-10-cm diagnosis ")), 1, function(x) paste(na.omit(x), collapse = " "))
+#   ) %>%
+#   mutate(
+#     J205 = if_else(grepl("J205", all_icd), 1, 0),
+#     J210 = if_else(grepl("J210", all_icd), 1, 0),
+#     J211 = if_else(grepl("J211", all_icd), 1, 0),
+#     J218 = if_else(grepl("J218", all_icd), 1, 0),
+#     J219 = if_else(grepl("J219", all_icd), 1, 0),
+#     J121 = if_else(grepl("J121", all_icd), 1, 0),
+#     B974 = if_else(grepl("B974", all_icd), 1, 0),
+#     rsv_flag = if_else(J205 == 1 | J210 == 1 | J211 == 1 | J218 == 1 | J219 == 1 | J121 == 1 | B974 == 1, 1, 0)
+#   ) %>%
+#   right_join(NY_cohort1, by = "id") %>%
+#   arrange(id, date) %>%
+#   group_by(id) %>%
+#   mutate(
+#     rsv_flag = replace_na(rsv_flag, 0),
+#     rsv_episode_N = cumsum(rsv_flag)
+#   ) %>%
+#   filter(rsv_episode_N <= 1)
+```
+
+
+# SEDD parquet
+```{r}
+#NY_pq <- open_dataset("/Volumes/home/HCUPdata-CC0941-MEDSPH/ParquetData/NY_SEDD", format = "parquet")
+```
+
+# SEDD Total pop, Give it about 20 min to run
+```{r}
+# # Convert column names to lowercase before processing
+# NY_pq <- NY_pq %>%
+#   rename_with(tolower)
+# 
+# # Select relevant columns (ensuring all column names are lowercase)
+# SEDD_rsv_cases <- NY_pq %>%
+#   select(
+#     visitlink, byear, bmonth, amonth, ayear, female, race, hispanic,
+#     zipinc_qrtl, zip, zip3, age, agemonth, ageday,
+#     starts_with("i10_dx")
+#   ) %>%
+#   collect() %>%  # Pull data into R
+#   rename(
+#     # Basic details (using lowercase column names after renaming)
+#     id = visitlink,
+#     birth_year = byear,
+#     birth_month = bmonth,
+#     sex = female,
+#     race = race,
+#     ethnicity = hispanic,
+#     income_national_quartile = zipinc_qrtl,
+#     zip = zip,
+#     zip_3digits = zip3,
+#     admis_age_year = age,
+#     admis_age_day = ageday,
+#     admis_age_mon = agemonth
+#   )%>%
+#   # Ensure `Ayear` and `Amonth` are numeric
+#   mutate(across(c(ayear, amonth), as.numeric)) %>%
+#   mutate(
+#     date = ayear + amonth / 12,
+#     # Create `all_icd` by pasting all `I10_DX` columns together
+#     all_icd = apply(select(., starts_with("i10_dx")), 1, function(x) paste(na.omit(x), collapse = " "))
+#   ) %>%
+#   mutate(
+#     J205 = if_else(grepl("J205", all_icd), 1, 0),
+#     J210 = if_else(grepl("J210", all_icd), 1, 0),
+#     J211 = if_else(grepl("J211", all_icd), 1, 0),
+#     J218 = if_else(grepl("J218", all_icd), 1, 0),
+#     J219 = if_else(grepl("J219", all_icd), 1, 0),
+#     J121 = if_else(grepl("J121", all_icd), 1, 0),
+#     B974 = if_else(grepl("B974", all_icd), 1, 0),
+#     rsv_flag = if_else(J205 == 1 | J210 == 1 | J211 == 1 | J218 == 1 | J219 == 1 | J121 == 1 | B974 == 1, 1, 0)
+#   ) %>%
+#   right_join(NY_cohort1, by = "id") %>%
+#   arrange(id, date) %>%
+#   group_by(id) %>%
+#   mutate(
+#     rsv_flag = replace_na(rsv_flag, 0),
+#     rsv_episode_N = cumsum(rsv_flag)
+#   ) %>%
+#   filter(rsv_episode_N <= 1)
+```
+
+=================
+
+# SHORT CUT 1
+```{r}
+#saveRDS(SID_rsv_cases, '/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/SID_rsv_cases_20250412')
+SID_rsv_cases <- readRDS("/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/SID_rsv_cases_20250412")
+#saveRDS(SEDD_rsv_cases, '/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/SEDD_rsv_cases_20250419')
+SEDD_rsv_cases <- readRDS("/Volumes/home/HCUPdata-CC0941-MEDSPH/myrrha/Data/SEDD_rsv_cases_20250419")
+```
+
+=================
+
+# SID keep only infants
+```{r}
+SID_rsv_filtered <- SID_rsv_cases %>%
+  select(id, birth_year.x, birth_month.x, amonth, ayear, sex, race, ethnicity,
+         income_national_quartile, zip, zip_3digits, admis_age_year, admis_age_mon,
+         admis_age_day, date, rsv_flag, bwt) %>%
+  arrange(id, date) %>%
+  group_by(id) %>%
+  filter(rsv_flag == 1 | row_number() == 1) %>% 
+  slice_head(n = 1) %>%   
+  ungroup() %>%
+  filter(birth_year.x >= 2016 & birth_year.x <= 2019) %>%
+  mutate(
+    bwt = as.character(bwt),
+    Birthweight = case_when(
+      bwt == "A" ~ "Unknown",
+      !is.na(bwt) & as.numeric(bwt) >= 2500 ~ "Normal",
+      !is.na(bwt) & as.numeric(bwt) < 1500 ~ "Very Low Birthweight",
+      !is.na(bwt) & as.numeric(bwt) >= 1500 & as.numeric(bwt) < 2500 ~ "Low Birthweight",
+      TRUE ~ NA_character_
+    )
+  )%>%
+rename(
+  birth_year = birth_year.x,
+  birth_month = birth_month.x
+)
+```
+# SID Descriptive
+```{r}
+library(dplyr)
+library(purrr)
+
+SID_rsv_filtered <- SID_rsv_filtered %>%
+  mutate(across(-Birthweight, as.factor))
+
+SID_rsv_filtered %>%
+  select(where(is.factor), where(is.character)) %>%
+  imap(~ {
+    cat("\n\n============================\n")
+    cat("Variable:", .y, "\n")
+    cat("============================\n")
+    as.data.frame(table(.x, useNA = "ifany")) %>%
+      rename(Value = ".x", Count = "Freq") %>%
+      print()
+  })
+```
+
+# SEDD keep only infants
+```{r}
+# Filter, group, and keep only the first RSV-positive case
+SEDD_rsv_filtered <- SEDD_rsv_cases %>%
+  select(
+    id, birth_year.y, birth_month.y, amonth, ayear, sex, race, ethnicity,
+    income_national_quartile, zip, zip_3digits, admis_age_year,
+    admis_age_mon, admis_age_day, date, rsv_flag, bwt
+  ) %>%
+  arrange(id, date) %>%
+  group_by(id) %>%
+  slice_max(order_by = rsv_flag, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  filter(birth_year.y >= 2016 & birth_year.y <= 2019) %>%
+  mutate(
+    bwt = as.character(bwt),
+    Birthweight = case_when(
+      bwt == "A" ~ "Unknown",
+      !is.na(bwt) & as.numeric(bwt) >= 2500 ~ "Normal",
+      !is.na(bwt) & as.numeric(bwt) < 1500 ~ "Very Low Birthweight",
+      !is.na(bwt) & as.numeric(bwt) >= 1500 & as.numeric(bwt) < 2500 ~ "Low Birthweight",
+      TRUE ~ NA_character_
+    )
+  )%>%
+rename(
+  birth_year = birth_year.y,
+  birth_month = birth_month.y
+)
+
+#### UNFINISHED DO FILL UP
+```
+
+# SEDD Descriptive
+```{r}
+library(dplyr)
+library(purrr)
+
+SEDD_rsv_filtered <- SEDD_rsv_filtered %>%
+  mutate(across(-Birthweight, as.factor))
+
+SEDD_rsv_filtered %>%
+  select(where(is.factor), where(is.character)) %>%
+  imap(~ {
+    cat("\n\n============================\n")
+    cat("Variable:", .y, "\n")
+    cat("============================\n")
+    as.data.frame(table(.x, useNA = "ifany")) %>%
+      rename(Value = ".x", Count = "Freq") %>%
+      print()
+  })
+```
+
+
+# check birth year
+birth_year_counts <- SEDD_rsv_filtered %>%
+  group_by(birth_year.y) %>%
+  summarise(distinct_id_count = n_distinct(id))
+  
+# Fill the demo info from SID to SEDD = WRONG
+```{r}
+library(dplyr)
+library(stringr)
+
+# Step 1: Join SID and SEDD by 'id', keeping suffixes to distinguish source
+merged_data <- SID_rsv_filtered %>%
+  left_join(SEDD_rsv_filtered, by = "id", suffix = c(".sid", ".sedd"))
+
+# Step 2: Identify columns to fill (exclude rsv_flag and birth_year/birth_month)
+cols_to_fill <- names(merged_data)
+cols_to_fill <- cols_to_fill[
+  grepl("\\.sedd$", cols_to_fill) &
+  !grepl("rsv_flag", cols_to_fill) &
+  !grepl("birth_year|birth_month", cols_to_fill)
+]
+
+# Step 3: Fill missing values for general columns (use SEDD first, fallback to SID)
+merged_data_filled <- merged_data %>%
+  mutate(across(
+    all_of(cols_to_fill),
+    ~ coalesce(.x, get(str_replace(cur_column(), ".sedd", ".sid"))),
+    .names = "{str_replace(.col, '.sedd', '')}"
+  )) %>%
+  
+  # Step 4: Special handling for birth_year and birth_month
+  mutate(
+    birth_year = if_else(is.na(birth_year.sedd), birth_year.sid, birth_year.sedd),
+    birth_month = if_else(is.na(birth_month.sedd), birth_month.sid, birth_month.sedd)
+  )
+
+# Step 5: Select final columns (cleaned names)
+SEDD_rsv_filtered_final <- merged_data_filled %>%
+  select(
+    id,
+    all_of(str_replace(cols_to_fill, ".sedd", "")),  # cleaned general columns
+    birth_year,  # specially handled
+    birth_month, # specially handled
+    rsv_flag = rsv_flag.sedd  # keep RSV flag from SEDD
+  )
+
+
+```
+
+
+##### Go to PartB #####
+
+# Level source == PASS
+```{r}
+# SID_rsv_filtered_1 <- SID_rsv_filtered_1 %>%
+#   mutate(source = "SID")
+# SEDD_rsv_filtered_1 <- SEDD_rsv_filtered_1 %>%
+#   mutate(source = "SEDD")
+```
+
+                 
+# Total cohort
+```{r} 
+rsv_merged_1 <- bind_rows(SID_rsv_filtered_1, SEDD_rsv_filtered_1)
+
+rsv_merged_1_filtered <- rsv_merged_1 %>%
+  arrange(id, date) %>%
+  group_by(id) %>%
+  filter(
+    if (any(rsv_flag == "RSV positive")) {
+      row_number() == min(which(rsv_flag == "RSV positive"))
+    } else {
+      row_number() == 1
+    }
+  ) %>%
+  ungroup()
+
+rsv_merged_1_filtered %>%
+  count(rsv_flag)
+# Bacl to Part B
+```
+
+# Start from here is date setup for KM curves===================================
+# Normalize age.
+```{r}
+# Turn age to numeric and normalize to day unit
+rsv_merged_cases_4_1 <- rsv_merged_1_filtered %>%
+  mutate(
+    admis_age_year = as.numeric(if_else(admis_age_year %in% c("A", "B", "C"), NA_character_, as.character(admis_age_year))),
+    admis_age_mon  = as.numeric(if_else(admis_age_mon  %in% c("A", "B", "C"), NA_character_, as.character(admis_age_mon))),
+    admis_age_day  = as.numeric(if_else(admis_age_day %in% c("A", "B", "C"), NA_character_, as.character(admis_age_day)))
+  )
+
+
+# make sure only infant <2 years are included
+rsv_merged_cases_4_2 <- rsv_merged_cases_4_1 %>% 
+  mutate(
+    admis_age_year = if_else(admis_age_year > 2, NA_real_, admis_age_year),
+    admis_age_mon = if_else(admis_age_mon > 24, NA_real_, admis_age_mon),
+    admis_age_day = if_else(admis_age_day > 730, NA_real_, admis_age_day),
+    
+    admis_age_norm = pmax(
+      admis_age_year * 365.25,
+      admis_age_mon * 30.44,
+      admis_age_day,
+      na.rm = TRUE
+    )
+  ) 
+```
+
+
+
+# Set up time to event 
+```{r}
+rsv_merged_cases_4_2 <- rsv_merged_cases_4_2 %>%
+  mutate(
+    rsv_flag = case_when(
+      rsv_flag == "RSV negative" ~ 0,
+      rsv_flag == "RSV positive" ~ 1,
+      TRUE ~ NA_real_
+    )
+  )
+
+# Create start and end time 
+rsv_merged_cases_4_2 <- rsv_merged_cases_4_2 %>%
+  mutate(
+    start_time = birth_year + birth_month / 12,
+    end_time = ifelse(rsv_flag == 1,
+                      ayear + amonth / 12,
+                      2019 + 12 / 12),  # Sets December 31, 2019 as end_time
+    time_to_event = end_time - start_time,
+    time_to_event_days = time_to_event * 365.25  # Convert years to days
+  ) 
+```
+
+# Time to event f
+```{r}
+rsv_merged_cases_4_2 <- rsv_merged_cases_4_2 %>%
+  mutate(
+    time_to_event_days = round(time_to_event_days, 2),
+    time_to_event_f = case_when(
+      rsv_flag == 1 & !is.na(admis_age_norm) & admis_age_norm != 0 ~ admis_age_norm,
+      rsv_flag == 1 & (admis_age_norm == 0 | is.na(admis_age_norm)) ~ time_to_event_days,
+      rsv_flag == 0 ~ time_to_event_days
+    )
+  )
+```
+
+
+# KM curve visualization
+```{r}
+# Create survival object
+surv_obj <- Surv(time = rsv_merged_cases_4_2$time_to_event_f, event = rsv_merged_cases_4_2$rsv_flag)
+
+# Fit Kaplan-Meier model
+km_fit <- survfit(surv_obj ~ 1, data = rsv_merged_cases_4_2)
+
+# Plot KM curve
+ggsurvplot(km_fit, 
+           data = rsv_merged_cases_4_2, 
+           xlab = "Time (Day)", 
+           ylab = "Survival Probability", 
+           title = "Kaplan-Meier Curve for RSV Patients", 
+           conf.int = TRUE,
+           risk.table = TRUE,
+           xlim = c(0, 730),   
+           ylim = c(0.92, 1), 
+           break.y.by = 0.01 
+           )  
+```
+
+
+
+
+
+```{r}
+# Fit the KM model stratified by Sex
+km_fit_sex <- survfit(surv_obj ~ sex, data = rsv_merged_cases_4_2)
+
+# Plot the KM curve stratified by Sex
+ggsurvplot(
+  km_fit_sex,
+  data = rsv_merged_cases_4_2,
+  conf.int = TRUE,
+  risk.table = TRUE,
+  xlab = "Time (Day)",
+  ylab = "Survival Probability",
+  title = "Kaplan-Meier Curve Stratified by Sex",
+  xlim = c(0, 730),   
+  ylim = c(0.92, 1), 
+  break.y.by = 0.01  
+)
+```
+
+```{r}
+rsv_merged_cases_4_2 <- rsv_merged_cases_4_2 %>%
+  mutate(Race = factor(Race, 
+                       levels = c("White", "Black", "Asian or Pacific Islander", 
+                                  "Hispanic", "Native American", "Other"),
+                       ordered = TRUE))
+# Fit the KM model stratified by Race
+km_fit_race <- survfit(surv_obj ~ Race, data = rsv_merged_cases_4_2)
+# Plot the KM curve stratified by Race
+ggsurvplot(
+  km_fit_race,
+  data = rsv_merged_cases_4_2,
+  conf.int = TRUE,
+  risk.table = TRUE,
+  xlab = "Time (Day)",
+  ylab = "Survival Probability",
+  title = "Kaplan-Meier Curve Stratified by Race",
+  xlim = c(0, 730),   
+  ylim = c(0.92, 1), 
+  break.y.by = 0.01 
+)
+```
+
+```{r}
+rsv_merged_cases_4_2 <- rsv_merged_cases_4_2 %>%
+  mutate(Birthweight = factor(Birthweight, 
+                       levels = c("Normal", "Low Birthweight", "Very Low Birthweight","Unknown"),
+                       ordered = TRUE))
+
+# Fit the KM model stratified by Sex
+km_fit_birthweight <- survfit(surv_obj ~ Birthweight, data = rsv_merged_cases_4_2)
+
+# Plot the KM curve stratified by Sex
+ggsurvplot(
+  km_fit_birthweight,
+  data = rsv_merged_cases_4_2,
+  conf.int = TRUE,
+  risk.table = TRUE,
+  xlab = "Time (Day)",
+  ylab = "Survival Probability",
+  title = "Kaplan-Meier Curve Stratified by Birth Weight",
+  xlim = c(0, 730),   
+  ylim = c(0.92, 1), 
+  break.y.by = 0.01  
+)
+```
+
+
+
+
+
+```{r}
+# Recode National Income Quartile as an ordered factor
+rsv_merged_cases_4_2 <- rsv_merged_cases_4_2 %>%
+  mutate(
+    StateIncomeQuartile = factor(
+      StateIncomeQuartile,
+      levels = c("$1 – $47,999", "$48,000 – $60,999", "$61,000 – $81,999", "$82,000 and above","Missing"),
+      ordered = TRUE
+    )
+  )
+
+# Fit the KM model stratified by National Income Quartile
+km_fit_income <- survfit(surv_obj ~ StateIncomeQuartile, data = rsv_merged_cases_4_2)
+
+# Plot the KM curve with custom legend labels
+ggsurvplot(
+  km_fit_income,
+  data = rsv_merged_cases_4_2,
+  conf.int = TRUE,
+  risk.table = TRUE,
+  xlab = "Time (Day)",
+  ylab = "Survival Probability",
+  title = "Kaplan-Meier Curve Stratified by National Income Quartile",
+  legend.labs = c(
+    "Income = $1 – $47,999",
+    "Income = $48,000 – $60,999",
+    "Income = $61,000 – $81,999",
+    "Income = $82,000 and above",
+    "Income = Missing"
+  ),
+  xlim = c(0, 730),
+  ylim = c(0.92, 1),
+  break.y.by = 0.01
+)
+
+```
+
+
+
+
+# Start from here only see patients that got a NY zip code =====
+```{r}
+rsv_merged_cases_5 <- rsv_merged_cases_4_2 %>% 
+  filter(State.Abbreviation == "NY")
+```
+
+# KM Curve
+```{r}
+# Create survival object
+surv_obj <- Surv(time = rsv_merged_cases_5$time_to_event_f, event = rsv_merged_cases_5$rsv_flag)
+
+# Fit Kaplan-Meier model
+km_fit <- survfit(surv_obj ~ 1, data = rsv_merged_cases_5)
+
+# Plot KM curve
+ggsurvplot(km_fit, 
+           data = rsv_merged_cases_5, 
+           xlab = "Time (Day)", 
+           ylab = "Survival Probability", 
+           title = "Kaplan-Meier Curve for RSV Patients", 
+           conf.int = TRUE,
+           risk.table = TRUE,
+           xlim = c(0, 730),   
+           ylim = c(0.92, 1), 
+           break.y.by = 0.01  
+)
+```
+
+
+```{r}
+# Fit the KM model stratified by Sex
+km_fit_sex <- survfit(surv_obj ~ sex, data = rsv_merged_cases_5)
+# Plot the KM curve stratified by Sex
+ggsurvplot(km_fit_sex,
+           data = rsv_merged_cases_5,
+           conf.int = TRUE,
+           risk.table = TRUE,
+           xlab = "Time (Day)",
+           ylab = "Survival Probability",
+           title = "Kaplan-Meier Curve Stratified by Sex",
+           xlim = c(0, 730),   
+           ylim = c(0.92, 1), 
+           break.y.by = 0.01  
+)
+```
+
+```{r}
+rsv_merged_cases_5 <- rsv_merged_cases_5 %>%
+  mutate(Race = factor(Race, 
+                       levels = c("White", "Black", "Asian or Pacific Islander", 
+                                  "Hispanic", "Native American", "Other"),
+                       ordered = TRUE))
+
+# Fit the KM model stratified by Race
+km_fit_race <- survfit(surv_obj ~ Race, data = rsv_merged_cases_5)
+# Plot the KM curve stratified by Race
+ggsurvplot(
+  km_fit_race,
+  data = rsv_merged_cases_5,
+  conf.int = TRUE,
+  risk.table = TRUE,
+  xlab = "Time (Day)",
+  ylab = "Survival Probability",
+  title = "Kaplan-Meier Curve Stratified by Race",
+  xlim = c(0, 730),   
+  ylim = c(0.92, 1), 
+  break.y.by = 0.01  
+)
+```
+
+```{r}
+# Recode National Income Quartile as an ordered factor
+rsv_merged_cases_5 <- rsv_merged_cases_5 %>%
+  mutate(
+    StateIncomeQuartile = factor(
+      StateIncomeQuartile,
+      levels = c("$1 – $47,999", "$48,000 – $60,999", "$61,000 – $81,999", "$82,000 and above","Missing"),
+      ordered = TRUE
+    )
+  )
+
+# Fit the KM model stratified by National Income Quartile
+km_fit_income <- survfit(surv_obj ~ StateIncomeQuartile, data = rsv_merged_cases_5)
+
+# Plot the KM curve with custom legend labels
+ggsurvplot(
+  km_fit_income,
+  data = rsv_merged_cases_5,
+  conf.int = TRUE,
+  risk.table = TRUE,
+  xlab = "Time (Day)",
+  ylab = "Survival Probability",
+  title = "Kaplan-Meier Curve Stratified by National Income Quartile",
+  legend.labs = c(
+    "Income = $1 – $47,999",
+    "Income = $48,000 – $60,999",
+    "Income = $61,000 – $81,999",
+    "Income = $82,000 and above",
+    "Income = Missing"
+  ),
+  xlim = c(0, 730),
+  ylim = c(0.92, 1),
+  break.y.by = 0.01
+)
+
+```
+
+```{r}
+rsv_merged_cases_5 <- rsv_merged_cases_5 %>%
+  mutate(Birthweight = factor(Birthweight, 
+                       levels = c("Normal", "Low Birthweight", "Very Low Birthweight","Unknown"),
+                       ordered = TRUE))
+
+# Fit the KM model stratified by Sex
+km_fit_birthweight <- survfit(surv_obj ~ Birthweight, data = rsv_merged_cases_5)
+
+# Plot the KM curve stratified by Sex
+ggsurvplot(
+  km_fit_birthweight,
+  data = rsv_merged_cases_5,
+  conf.int = TRUE,
+  risk.table = TRUE,
+  xlab = "Time (Day)",
+  ylab = "Survival Probability",
+  title = "Kaplan-Meier Curve Stratified by Birth Weight",
+  xlim = c(0, 730),   
+  ylim = c(0.92, 1), 
+  break.y.by = 0.01  
+)
+```
+

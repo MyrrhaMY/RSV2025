@@ -1,0 +1,609 @@
+---
+title: "Survival Model"
+output: html_document
+date: "2025-02-28"
+---
+
+```{r}
+# Load necessary libraries
+library(survival)
+library(survminer)
+
+```
+
+```{r}
+library(forcats)
+
+# Step 1: Replace NA with "Missing" correctly (keep factor)
+rsv_merged_cases_4_3 <- rsv_merged_cases_4_2 %>%
+  mutate(
+    StateIncomeQuartile = fct_explicit_na(StateIncomeQuartile, na_level = "Missing")
+  )
+
+```
+
+```{r}
+# 
+rsv_merged_cases_4_4 <- rsv_merged_cases_4_3 %>%
+  mutate(
+    Sex = relevel(factor(Sex, ordered = FALSE), ref = "Female"),
+    Race = relevel(factor(Race, ordered = FALSE), ref = "White"),
+    Income = relevel(factor(StateIncomeQuartile, ordered = FALSE), ref = "$1 – $47,999"),
+    BirthMonth = relevel(factor(birth_month, ordered = FALSE), ref = "1")
+  )
+
+# Fit the updated Cox model with BirthMonth
+cox_model <- coxph(Surv(time_to_event_f, rsv_flag) ~ Sex + Race + Income + BirthMonth, data = rsv_merged_cases_4_4)
+
+# Print model summary
+summary(cox_model)
+
+```
+
+```{r}
+# Extract model summary
+model_summary <- summary(cox_model)
+
+# Create a dataframe with HRs and CIs
+HR_df <- data.frame(
+  Variable = rownames(model_summary$coefficients),  # Predictor names
+  HR = exp(model_summary$coefficients[, "coef"]),  # Hazard Ratios
+  Lower_CI = model_summary$conf.int[, "lower .95"],  # Corrected Lower CI
+  Upper_CI = model_summary$conf.int[, "upper .95"],  # Corrected Upper CI
+  p_value = model_summary$coefficients[, "Pr(>|z|)"]  # P-values
+)
+
+# View extracted data
+print(HR_df)
+
+```
+
+
+
+```{r}
+# SID +SEDD zip limited
+
+rsv_merged_cases_5_1 <- rsv_merged_cases_5 %>%
+  mutate(
+    Sex = relevel(factor(Sex, ordered = FALSE), ref = "Female"),
+    Race = relevel(factor(Race, ordered = FALSE), ref = "White"),
+    Income = relevel(factor(StateIncomeQuartile, ordered = FALSE), ref = "$1 – $47,999"),
+    BirthMonth = relevel(factor(birth_month, ordered = FALSE), ref = "1")
+  )
+
+# Fit the updated Cox model with BirthMonth
+cox_model_NY <- coxph(Surv(time_to_event_f, rsv_flag) ~ Sex + Race + Income + BirthMonth, data = rsv_merged_cases_5_1)
+
+# Print model summary
+summary(cox_model_NY)
+
+```
+
+```{r}
+
+# Extract model summary
+model_summary <- summary(cox_model_NY)
+
+# Create a dataframe with HRs and CIs
+HR_df_NY <- data.frame(
+  Variable = rownames(model_summary$coefficients),  # Predictor names
+  HR = exp(model_summary$coefficients[, "coef"]),  # Hazard Ratios
+  Lower_CI = model_summary$conf.int[, "lower .95"],  # Corrected Lower CI
+  Upper_CI = model_summary$conf.int[, "upper .95"],  # Corrected Upper CI
+  p_value = model_summary$coefficients[, "Pr(>|z|)"]  # P-values
+)
+
+# View extracted data
+print(HR_df_NY)
+
+```
+
+```{r}
+# Plot
+# Create clean labels for plotting
+HR_df_NY$Label <- recode(HR_df_NY$Variable,
+  "SexMale" = "Male",
+  "RaceBlack" = "Black",
+  "RaceAsian or Pacific Islander" = "Asian or Pacific Islander",
+  "RaceHispanic" = "Hispanic",
+  "RaceNative American" = "Native American",
+  "RaceOther" = "Other",
+  "Income$48,000 – $60,999" = "$48,000 – $60,999",
+  "Income$61,000 – $81,999" = "$61,000 – $81,999",
+  "Income$82,000 and above" = "$82,000 and above",
+  "IncomeMissing" = "Income Missing",
+  "BirthMonth2" = "Born in Feb",
+  "BirthMonth3" = "Born in Mar",
+  "BirthMonth4" = "Born in Apr",
+  "BirthMonth5" = "Born in May",
+  "BirthMonth6" = "Born in Jun",
+  "BirthMonth7" = "Born in Jul",
+  "BirthMonth8" = "Born in Aug",
+  "BirthMonth9" = "Born in Sep",
+  "BirthMonth10" = "Born in Oct",
+  "BirthMonth11" = "Born in Nov",
+  "BirthMonth12" = "Born in Dec"
+)
+
+# Ensure label order for plotting (reverse for top-to-bottom y-axis)
+HR_df_NY$Label <- factor(HR_df_NY$Label, levels = rev(HR_df_NY$Label))
+
+# Plot: Forest Plot
+library(ggplot2)
+
+ggplot(HR_df_NY, aes(x = Label, y = HR, ymin = Lower_CI, ymax = Upper_CI)) +
+  geom_pointrange(color = "blue") +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  coord_flip() +
+  theme_minimal(base_size = 14) +
+  labs(
+    title = "Figure 2. Forest Plot of Hazard Ratios for RSV Infection in New York Infants <2 Years (NY Residents)",
+    y = "Hazard Ratio (95% CI)",
+    x = "Sociodemographic Factors"
+  )
+```
+
+=========
+NEW 04132025
+====================
+uni!!!
+=========
+Total
+
+```{r}
+# Load required packages
+library(survival)
+library(dplyr)
+library(ggplot2)
+
+# Step 1: Define univariate variables
+uni_vars <- c("Sex", "Race", "Income", "BirthMonth")
+
+# Step 2: Fit univariate Cox models and extract results
+uni_results <- lapply(uni_vars, function(var) {
+  f <- as.formula(paste("Surv(time_to_event_f, rsv_flag) ~", var))
+  model <- coxph(f, data = rsv_merged_cases_4_4)
+  model_sum <- summary(model)
+  
+  data.frame(
+    Variable = rownames(model_sum$coefficients),
+    HR = exp(model_sum$coefficients[, "coef"]),
+    Lower_CI = model_sum$conf.int[, "lower .95"],
+    Upper_CI = model_sum$conf.int[, "upper .95"],
+    p_value = model_sum$coefficients[, "Pr(>|z|)"],
+    Predictor = var
+  )
+})
+
+# Combine all into one dataframe
+univariate_HR_df <- do.call(rbind, uni_results)
+
+# Step 3: Map clean labels
+label_map <- c(
+  "SexMale" = "Male",
+  "RaceBlack" = "Black",
+  "RaceAsian or Pacific Islander" = "Asian or Pacific Islander",
+  "RaceHispanic" = "Hispanic",
+  "RaceNative American" = "Native American",
+  "RaceOther" = "Other",
+  "Income$48,000 – $60,999" = "$48,000 – $60,999",
+  "Income$61,000 – $81,999" = "$61,000 – $81,999",
+  "Income$82,000 and above" = "$82,000 and above",
+  "IncomeMissing" = "Income Missing",
+  "BirthMonth2" = "Born in Feb",
+  "BirthMonth3" = "Born in Mar",
+  "BirthMonth4" = "Born in Apr",
+  "BirthMonth5" = "Born in May",
+  "BirthMonth6" = "Born in Jun",
+  "BirthMonth7" = "Born in Jul",
+  "BirthMonth8" = "Born in Aug",
+  "BirthMonth9" = "Born in Sep",
+  "BirthMonth10" = "Born in Oct",
+  "BirthMonth11" = "Born in Nov",
+  "BirthMonth12" = "Born in Dec"
+)
+
+univariate_HR_df$Label <- label_map[univariate_HR_df$Variable]
+
+# Step 4: Add variable group
+univariate_HR_df$Group <- case_when(
+  grepl("Sex", univariate_HR_df$Variable) ~ "Sex",
+  grepl("Race", univariate_HR_df$Variable) ~ "Race",
+  grepl("Income", univariate_HR_df$Variable) ~ "Income",
+  grepl("BirthMonth", univariate_HR_df$Variable) ~ "Birth Month",
+  TRUE ~ "Other"
+)
+
+# Step 5: Set label order for plotting (reverse for coord_flip)
+label_order <- c(
+  "Male",
+  "Black", "Asian or Pacific Islander", "Hispanic", "Native American", "Other",
+  "$48,000 – $60,999", "$61,000 – $81,999", "$82,000 and above", "Income Missing",
+  "Born in Feb", "Born in Mar", "Born in Apr", "Born in May", "Born in Jun",
+  "Born in Jul", "Born in Aug", "Born in Sep", "Born in Oct", "Born in Nov", "Born in Dec"
+)
+
+univariate_HR_df$Label <- factor(univariate_HR_df$Label, levels = rev(label_order))
+
+# Step 6: Plot
+ggplot(univariate_HR_df, aes(x = Label, y = HR, color = Group)) +
+  geom_point(size = 2) +
+  geom_errorbar(aes(ymin = Lower_CI, ymax = Upper_CI), width = 0.25) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "gray40") +
+  coord_flip() +
+  scale_y_continuous(limits = c(0.2, 3)) +
+  labs(
+    title = "Figure 3. Forest Plot of Univariate Hazard Ratios for RSV Infection in New York Infants <2 Years
+",
+    x = "Predictor",
+    y = "Hazard Ratio (95% CI)",
+    color = "Variable Group"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    legend.position = "top",
+    legend.title = element_text(size = 10),
+    axis.text.y = element_text(size = 10),
+    plot.title = element_text(hjust = 0.5, size = 12),
+    aspect.ratio = 0.7 
+  )
+
+
+
+```
+
+```{r}
+# New Multi
+# Load required packages
+library(survival)
+library(dplyr)
+library(ggplot2)
+
+# Step 1: Fit the multivariate Cox model
+cox_model <- coxph(Surv(time_to_event_f, rsv_flag) ~ Sex + Race + Income + BirthMonth, 
+                   data = rsv_merged_cases_4_4)
+
+# Step 2: Extract model summary
+model_summary <- summary(cox_model)
+
+# Step 3: Create a dataframe with HRs and CIs
+multivariate_HR_df <- data.frame(
+  Variable = rownames(model_summary$coefficients),
+  HR = exp(model_summary$coefficients[, "coef"]),
+  Lower_CI = model_summary$conf.int[, "lower .95"],
+  Upper_CI = model_summary$conf.int[, "upper .95"],
+  p_value = model_summary$coefficients[, "Pr(>|z|)"]
+)
+
+# Step 4: Map clean labels
+label_map <- c(
+  "SexMale" = "Male",
+  "RaceBlack" = "Black",
+  "RaceAsian or Pacific Islander" = "Asian or Pacific Islander",
+  "RaceHispanic" = "Hispanic",
+  "RaceNative American" = "Native American",
+  "RaceOther" = "Other",
+  "Income$48,000 – $60,999" = "$48,000 – $60,999",
+  "Income$61,000 – $81,999" = "$61,000 – $81,999",
+  "Income$82,000 and above" = "$82,000 and above",
+  "IncomeMissing" = "Income Missing",
+  "BirthMonth2" = "Born in Feb",
+  "BirthMonth3" = "Born in Mar",
+  "BirthMonth4" = "Born in Apr",
+  "BirthMonth5" = "Born in May",
+  "BirthMonth6" = "Born in Jun",
+  "BirthMonth7" = "Born in Jul",
+  "BirthMonth8" = "Born in Aug",
+  "BirthMonth9" = "Born in Sep",
+  "BirthMonth10" = "Born in Oct",
+  "BirthMonth11" = "Born in Nov",
+  "BirthMonth12" = "Born in Dec"
+)
+
+multivariate_HR_df$Label <- label_map[multivariate_HR_df$Variable]
+
+# Step 5: Add variable group for color
+multivariate_HR_df$Group <- case_when(
+  grepl("Sex", multivariate_HR_df$Variable) ~ "Sex",
+  grepl("Race", multivariate_HR_df$Variable) ~ "Race",
+  grepl("Income", multivariate_HR_df$Variable) ~ "Income",
+  grepl("BirthMonth", multivariate_HR_df$Variable) ~ "Birth Month",
+  TRUE ~ "Other"
+)
+
+# Step 6: Reorder labels for plotting
+label_order <- c(
+  "Male",
+  "Black", "Asian or Pacific Islander", "Hispanic", "Native American", "Other",
+  "$48,000 – $60,999", "$61,000 – $81,999", "$82,000 and above", "Income Missing",
+  "Born in Feb", "Born in Mar", "Born in Apr", "Born in May", "Born in Jun",
+  "Born in Jul", "Born in Aug", "Born in Sep", "Born in Oct", "Born in Nov", "Born in Dec"
+)
+
+multivariate_HR_df$Label <- factor(multivariate_HR_df$Label, levels = rev(label_order))
+
+# Step 7: Plot multivariate forest plot
+ggplot(multivariate_HR_df, aes(x = Label, y = HR, color = Group)) +
+  geom_point(size = 2) +
+  geom_errorbar(aes(ymin = Lower_CI, ymax = Upper_CI), width = 0.25) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "gray40") +
+  coord_flip() +
+  scale_y_continuous(limits = c(0.2, 3)) +
+  labs(
+    title = "Figure 4. Forest Plot of Multivariate Hazard Ratios for RSV Infection in New York Infants <2 Years",
+    x = "Predictor",
+    y = "Hazard Ratio (95% CI)",
+    color = "Variable Group"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    legend.position = "top",
+    legend.title = element_text(size = 10),
+    axis.text.y = element_text(size = 10),
+    plot.title = element_text(hjust = 0.5, size = 12),
+    aspect.ratio = 0.7 
+  )
+
+```
+
+# ====== This Version got same expend
+```{r}
+# Plot 1
+p1 <- ggplot(univariate_HR_df, aes(x = Label, y = HR, color = Group)) +
+  geom_point(size = 2) +
+  geom_errorbar(aes(ymin = Lower_CI, ymax = Upper_CI), width = 0.25) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "gray40") +
+  coord_flip() +
+  scale_y_continuous(limits = c(0.2, 3), expand = expansion(mult = c(0, 0.05))) +
+  labs(
+    title = "Figure 4. Forest Plot of Univariate Hazard Ratios for RSV Infection in New York Infants <2 Years",
+    x = "Predictor",
+    y = "Hazard Ratio (95% CI)",
+    color = "Variable Group"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    legend.position = "top",
+    legend.title = element_text(size = 10),
+    axis.text.y = element_text(size = 10),
+    axis.title.x = element_text(size = 12),  
+    axis.title.y = element_text(size = 12),  
+    plot.title = element_text(hjust = 0.5, size = 12),
+    aspect.ratio = 0.7,
+    plot.margin = margin(10, 10, 10, 10)
+  )
+
+print (p1)
+
+# Plot 2
+p2 <- ggplot(multivariate_HR_df, aes(x = Label, y = HR, color = Group)) +
+  geom_point(size = 2) +
+  geom_errorbar(aes(ymin = Lower_CI, ymax = Upper_CI), width = 0.25) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "gray40") +
+  coord_flip() +
+  scale_y_continuous(limits = c(0.2, 3), expand = expansion(mult = c(0, 0.05))) +
+  labs(
+    title = "Figure 3. Forest Plot of Multivariate Hazard Ratios for RSV Infection in New York Infants <2 Years",
+    x = "Predictor",
+    y = "Hazard Ratio (95% CI)",
+    color = "Variable Group"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    legend.position = "top",
+    legend.title = element_text(size = 10),
+    axis.text.y = element_text(size = 10),
+    axis.title.x = element_text(size = 12), 
+    axis.title.y = element_text(size = 12),  
+    plot.title = element_text(hjust = 0.5, size = 12),
+    aspect.ratio = 0.7,
+    plot.margin = margin(10, 10, 10, 10)
+  )
+
+print (p2)
+```
+
+
+===== LIMITED TO NY
+
+```{r}
+# New Multi
+# Load required packages
+library(survival)
+library(dplyr)
+library(ggplot2)
+
+# Step 1: Fit the multivariate Cox model
+cox_model <- coxph(Surv(time_to_event_f, rsv_flag) ~ Sex + Race + Income + BirthMonth, 
+                   data = rsv_merged_cases_5_1)
+
+# Step 2: Extract model summary
+model_summary <- summary(cox_model)
+
+# Step 3: Create a dataframe with HRs and CIs
+multivariate_HR_df <- data.frame(
+  Variable = rownames(model_summary$coefficients),
+  HR = exp(model_summary$coefficients[, "coef"]),
+  Lower_CI = model_summary$conf.int[, "lower .95"],
+  Upper_CI = model_summary$conf.int[, "upper .95"],
+  p_value = model_summary$coefficients[, "Pr(>|z|)"]
+)
+
+# Step 4: Map clean labels
+label_map <- c(
+  "SexMale" = "Male",
+  "RaceBlack" = "Black",
+  "RaceAsian or Pacific Islander" = "Asian or Pacific Islander",
+  "RaceHispanic" = "Hispanic",
+  "RaceNative American" = "Native American",
+  "RaceOther" = "Other",
+  "Income$48,000 – $60,999" = "$48,000 – $60,999",
+  "Income$61,000 – $81,999" = "$61,000 – $81,999",
+  "Income$82,000 and above" = "$82,000 and above",
+  "IncomeMissing" = "Income Missing",
+  "BirthMonth2" = "Born in Feb",
+  "BirthMonth3" = "Born in Mar",
+  "BirthMonth4" = "Born in Apr",
+  "BirthMonth5" = "Born in May",
+  "BirthMonth6" = "Born in Jun",
+  "BirthMonth7" = "Born in Jul",
+  "BirthMonth8" = "Born in Aug",
+  "BirthMonth9" = "Born in Sep",
+  "BirthMonth10" = "Born in Oct",
+  "BirthMonth11" = "Born in Nov",
+  "BirthMonth12" = "Born in Dec"
+)
+
+multivariate_HR_df$Label <- label_map[multivariate_HR_df$Variable]
+
+# Step 5: Add variable group for color
+multivariate_HR_df$Group <- case_when(
+  grepl("Sex", multivariate_HR_df$Variable) ~ "Sex",
+  grepl("Race", multivariate_HR_df$Variable) ~ "Race",
+  grepl("Income", multivariate_HR_df$Variable) ~ "Income",
+  grepl("BirthMonth", multivariate_HR_df$Variable) ~ "Birth Month",
+  TRUE ~ "Other"
+)
+
+# Step 6: Reorder labels for plotting
+label_order <- c(
+  "Male",
+  "Black", "Asian or Pacific Islander", "Hispanic", "Native American", "Other",
+  "$48,000 – $60,999", "$61,000 – $81,999", "$82,000 and above", "Income Missing",
+  "Born in Feb", "Born in Mar", "Born in Apr", "Born in May", "Born in Jun",
+  "Born in Jul", "Born in Aug", "Born in Sep", "Born in Oct", "Born in Nov", "Born in Dec"
+)
+
+multivariate_HR_df$Label <- factor(multivariate_HR_df$Label, levels = rev(label_order))
+
+# Step 7: Plot multivariate forest plot
+ggplot(multivariate_HR_df, aes(x = Label, y = HR, color = Group)) +
+  geom_point(size = 2) +
+  geom_errorbar(aes(ymin = Lower_CI, ymax = Upper_CI), width = 0.25) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "gray40") +
+  coord_flip() +
+  scale_y_continuous(limits = c(0.2, 3), expand = expansion(mult = c(0, 0.05))) +
+  labs(
+    title = "Figure 4. Forest Plot of Multivariate Hazard Ratios for RSV Infection in New York Infants <2 Years (NY Residents)",
+    x = "Predictor",
+    y = "Hazard Ratio (95% CI)",
+    color = "Variable Group"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    legend.position = "top",
+    legend.title = element_text(size = 10),
+    axis.text.y = element_text(size = 10),
+    axis.title.x = element_text(size = 12), 
+    axis.title.y = element_text(size = 12),  
+    plot.title = element_text(hjust = 0.5, size = 12),
+    aspect.ratio = 0.7,
+    plot.margin = margin(10, 10, 10, 10)
+  )
+
+
+```
+
+
+```{r}
+# Load required packages
+library(survival)
+library(dplyr)
+library(ggplot2)
+
+# Step 1: Define univariate variables
+uni_vars <- c("Sex", "Race", "Income", "BirthMonth")
+
+# Step 2: Fit univariate Cox models and extract results
+uni_results <- lapply(uni_vars, function(var) {
+  f <- as.formula(paste("Surv(time_to_event_f, rsv_flag) ~", var))
+  model <- coxph(f, data = rsv_merged_cases_5_1)
+  model_sum <- summary(model)
+  
+  data.frame(
+    Variable = rownames(model_sum$coefficients),
+    HR = exp(model_sum$coefficients[, "coef"]),
+    Lower_CI = model_sum$conf.int[, "lower .95"],
+    Upper_CI = model_sum$conf.int[, "upper .95"],
+    p_value = model_sum$coefficients[, "Pr(>|z|)"],
+    Predictor = var
+  )
+})
+
+# Combine all into one dataframe
+univariate_HR_df <- do.call(rbind, uni_results)
+
+# Step 3: Map clean labels
+label_map <- c(
+  "SexMale" = "Male",
+  "RaceBlack" = "Black",
+  "RaceAsian or Pacific Islander" = "Asian or Pacific Islander",
+  "RaceHispanic" = "Hispanic",
+  "RaceNative American" = "Native American",
+  "RaceOther" = "Other",
+  "Income$48,000 – $60,999" = "$48,000 – $60,999",
+  "Income$61,000 – $81,999" = "$61,000 – $81,999",
+  "Income$82,000 and above" = "$82,000 and above",
+  "IncomeMissing" = "Income Missing",
+  "BirthMonth2" = "Born in Feb",
+  "BirthMonth3" = "Born in Mar",
+  "BirthMonth4" = "Born in Apr",
+  "BirthMonth5" = "Born in May",
+  "BirthMonth6" = "Born in Jun",
+  "BirthMonth7" = "Born in Jul",
+  "BirthMonth8" = "Born in Aug",
+  "BirthMonth9" = "Born in Sep",
+  "BirthMonth10" = "Born in Oct",
+  "BirthMonth11" = "Born in Nov",
+  "BirthMonth12" = "Born in Dec"
+)
+
+univariate_HR_df$Label <- label_map[univariate_HR_df$Variable]
+
+# Step 4: Add variable group
+univariate_HR_df$Group <- case_when(
+  grepl("Sex", univariate_HR_df$Variable) ~ "Sex",
+  grepl("Race", univariate_HR_df$Variable) ~ "Race",
+  grepl("Income", univariate_HR_df$Variable) ~ "Income",
+  grepl("BirthMonth", univariate_HR_df$Variable) ~ "Birth Month",
+  TRUE ~ "Other"
+)
+
+# Step 5: Set label order for plotting (reverse for coord_flip)
+label_order <- c(
+  "Male",
+  "Black", "Asian or Pacific Islander", "Hispanic", "Native American", "Other",
+  "$48,000 – $60,999", "$61,000 – $81,999", "$82,000 and above", "Income Missing",
+  "Born in Feb", "Born in Mar", "Born in Apr", "Born in May", "Born in Jun",
+  "Born in Jul", "Born in Aug", "Born in Sep", "Born in Oct", "Born in Nov", "Born in Dec"
+)
+
+univariate_HR_df$Label <- factor(univariate_HR_df$Label, levels = rev(label_order))
+
+# Step 6: Plot
+ggplot(univariate_HR_df, aes(x = Label, y = HR, color = Group)) +
+  geom_point(size = 2) +
+  geom_errorbar(aes(ymin = Lower_CI, ymax = Upper_CI), width = 0.25) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "gray40") +
+  coord_flip() +
+  scale_y_continuous(limits = c(0.2, 3), expand = expansion(mult = c(0, 0.05))) +
+  labs(
+    title = "Figure 3. Forest Plot of Univariate Hazard Ratios for RSV Infection in New York Infants <2 Years (NY Residents)",
+    x = "Predictor",
+    y = "Hazard Ratio (95% CI)",
+    color = "Variable Group"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    legend.position = "top",
+    legend.title = element_text(size = 10),
+    axis.text.y = element_text(size = 10),
+    axis.title.x = element_text(size = 12),  
+    axis.title.y = element_text(size = 12),  
+    plot.title = element_text(hjust = 0.5, size = 12),
+    aspect.ratio = 0.7,
+    plot.margin = margin(10, 10, 10, 10)
+  )
+
+```
+

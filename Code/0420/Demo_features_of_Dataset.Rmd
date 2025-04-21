@@ -1,0 +1,250 @@
+---
+title: "Demo_features_of_Dataset"
+output: html_document
+date: "2025-04-04"
+---
+
+```{r}
+# ZIPcode mapping
+library(dplyr)
+
+# Read in the ZIP Code mapping file
+zip_map <- read.csv("/Users/myrrhayang/Desktop/Thesis_RSV/Expanded_ZIP_Code_Map.csv", stringsAsFactors = FALSE)
+
+# Ensure ZIP codes are character type and properly formatted
+zip_map$`X3.Digit.ZIP.Code` <- sprintf("%03s", zip_map$`X3.Digit.ZIP.Code`)
+rsv_merged_cases_4_2$zip_3digits <- sprintf("%03s", as.character(rsv_merged_cases_4_2$zip_3digits))
+
+# Left join
+rsv_merged_cases_4_2 <- rsv_merged_cases_4_2 %>%
+  left_join(zip_map, by = c("zip_3digits" = "X3.Digit.ZIP.Code"))
+```
+
+
+```{r}
+# Compare NY to other ZIPcode patient's sociodemographic factors
+library(dplyr)
+library(table1)
+
+# Step 1: Convert NA in Birthweight to "Missing" and set factor levels
+rsv_merged_cases_4_3 <- rsv_merged_cases_4_2 %>%
+  mutate(
+    Birthweight = as.character(Birthweight),
+    Birthweight = ifelse(is.na(Birthweight), "Missing", Birthweight),
+    Birthweight = factor(
+      Birthweight,
+      levels = c( "Normal", "Low Birthweight", "Very Low Birthweight", "Unknown", "Missing")
+    )
+  )
+
+# # Step 2: Recode N_Quartile to match income bands
+rsv_merged_cases_4_3 <- rsv_merged_cases_4_3 %>%
+   mutate(
+#     N_Quartile = case_when(
+#       N_Quartile == "First Quartile" ~ "$1 – $47,999",
+#       N_Quartile == "Second Quartile" ~ "$48,000 – $60,999",
+#       N_Quartile == "Third Quartile" ~ "$61,000 – $81,999",
+#       N_Quartile == "Fourth Quartile" ~ "$82,000 and above",
+#       TRUE ~ "Missing"
+#     ),
+    StateIncomeQuartile = factor(
+      StateIncomeQuartile,
+      levels = c("$1 – $47,999", "$48,000 – $60,999", "$61,000 – $81,999", "$82,000 and above")
+    )
+  )
+
+# Step 3: Set factor levels for other variables
+rsv_merged_cases_4_3 <- rsv_merged_cases_4_3 %>%
+  mutate(
+    sex = case_when(
+      sex == 1 ~ "Male",
+      sex == 0 ~ "Female",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  mutate(
+    Sex = factor(sex, levels = c("Male", "Female")),
+    Race = factor(Race, levels = c(
+      "Asian or Pacific Islander", "Black", "Hispanic", "Native American", "Other", "White"
+    )),
+    zip_region = case_when(
+      is.na(State.Abbreviation) ~ "Missing",
+      State.Abbreviation == "NY" ~ "NY",
+      TRUE ~ "Other"
+    ),
+    zip_region = factor(zip_region, levels = c("NY", "Other", "Missing"))
+  )
+
+# Step 4: Add labels for table1
+label(rsv_merged_cases_4_3$Sex) <- "Sex at Birth"
+label(rsv_merged_cases_4_3$Race) <- "Race/Ethnicity"
+label(rsv_merged_cases_4_3$StateIncomeQuartile) <- "State Income Quartile"
+label(rsv_merged_cases_4_3$Birthweight) <- "Birthweight"
+label(rsv_merged_cases_4_3$zip_region) <- "Region (ZIP 3-digit based)"
+
+# Step 5: Generate Table 1
+table1(
+  ~ Birthweight + Sex + Race + StateIncomeQuartile | zip_region,
+  data = rsv_merged_cases_4_3,
+  caption = "Table 4. Sociodemographic Characteristics of Infants by Region (New York vs. Other)"
+)
+
+```
+
+```{r}
+
+zip_region_summary <-rsv_merged_cases_4_2 %>%
+  count(State.Abbreviation) %>%
+  mutate(
+    percent = round(100 * n / sum(n), 2)
+  )%>%
+  arrange(desc(n))
+
+write.csv(zip_region_summary, "zip_region_summary.csv", row.names = FALSE)
+```
+
+```{r}
+# Region distribution of patients
+library(dplyr)
+library(knitr)
+
+# Create and format table
+zip_region_summary <- rsv_merged_cases_4_2 %>%
+  count(State.Abbreviation) %>%
+  mutate(
+    percent = round(100 * n / sum(n), 2),
+    Summary = paste0(n, " (", percent, "%)")
+  ) %>%
+  arrange(desc(n)) %>%
+  slice(1:10) %>%  # Keep top 10 only
+  select(`State` = State.Abbreviation, `N (%)` = Summary)
+
+# Show as Table 1-style
+kable(zip_region_summary, caption = "Table 5. Distribution of Patients by State (Top 10 States)")
+
+# Footnote (add below the table)
+cat("*Only the top 10 states with the highest patient distribution are shown.")
+
+```
+
+```{r}
+# Load required libraries
+library(tidyverse)
+library(maps)
+library(ggplot2)
+
+# Convert state abbreviation to full state names (lowercase)
+zip_region_summary <- zip_region_summary %>%
+  mutate(
+    region = tolower(state.name[match(State.Abbreviation, state.abb)]),
+    region = ifelse(is.na(region), "other", region)  # handle NA or unknown states
+  )
+
+# Get US state map data
+states_map <- map_data("state")
+
+# Merge with map data
+map_data_merged <- left_join(states_map, zip_region_summary, by = "region")
+
+# Add color group: NY = orange, others = gradient
+map_data_merged <- map_data_merged %>%
+  mutate(
+    fill_color = ifelse(region == "new york", "NY", "Other")
+  )
+
+# Plot map
+ggplot() +
+  geom_polygon(
+    data = filter(map_data_merged, fill_color == "Other"),
+    aes(x = long, y = lat, group = group, fill = percent),
+    color = "white"
+  ) +
+  geom_polygon(
+    data = filter(map_data_merged, fill_color == "NY"),
+    aes(x = long, y = lat, group = group),
+    fill = "orange",
+    color = "white"
+  ) +
+  scale_fill_gradient(
+    low = "#deebf7",
+    high = "#08519c",
+    na.value = "grey90",
+    name = "% of Patients"
+  ) +
+  coord_fixed(1.3) +
+  labs(title = "Figure1. Distribution of Patients by State") +
+  theme_minimal() +
+  theme(
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid = element_blank()
+  )
+
+```
+
+```{r}
+# Load required libraries
+library(tidyverse)
+library(maps)
+library(ggplot2)
+library(scales)
+
+# Convert state abbreviation to full state names (lowercase)
+zip_region_summary <- zip_region_summary %>%
+  mutate(
+    region = tolower(state.name[match(State.Abbreviation, state.abb)]),
+    region = ifelse(is.na(region), "other", region)
+  )
+
+# Get US state map data
+states_map <- map_data("state")
+
+# Merge patient data with map data
+map_data_merged <- left_join(states_map, zip_region_summary, by = "region")
+
+# Add flag to highlight NY in orange
+map_data_merged <- map_data_merged %>%
+  mutate(
+    fill_color = ifelse(region == "new york", "NY", "Other")
+  )
+
+# Plot with log10 scale for percent to improve visual contrast
+ggplot() +
+  # Plot other states with log-scale color
+  geom_polygon(
+    data = filter(map_data_merged, fill_color == "Other"),
+    aes(x = long, y = lat, group = group, fill = percent),
+    color = "white"
+  ) +
+  # Highlight NY
+  geom_polygon(
+    data = filter(map_data_merged, fill_color == "NY"),
+    aes(x = long, y = lat, group = group),
+    fill = "orange",
+    color = "white"
+  ) +
+  # Apply log-transformed gradient scale
+  scale_fill_gradient(
+    trans = "log10",
+    low = "#deebf7",
+    high = "#08519c",
+    na.value = "grey90",
+    breaks = c(0.001, 0.01, 0.1, 1, 10, 100),
+    labels = label_percent(scale = 1),
+    name = "% of Patients"
+  ) +
+  coord_fixed(1.3) +
+  labs(
+    title = "Figure1. Distribution of Patients by State (Log Scaled)",
+    x = NULL,
+    y = NULL
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid = element_blank()
+  )
+
+```
+
